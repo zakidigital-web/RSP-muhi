@@ -1,4 +1,5 @@
 
+import 'dotenv/config';
 import { defineConfig } from 'drizzle-kit';
 import type { Config } from 'drizzle-kit';
 
@@ -7,7 +8,7 @@ const dbConfig: Config = defineConfig({
   out: './drizzle',
   dialect: 'turso',
   dbCredentials: {
-    url: process.env.TURSO_CONNECTION_URL!,
+    url: (process.env.TURSO_CONNECTION_URL ?? process.env.TURSO_DATABASE_URL)!,
     authToken: process.env.TURSO_AUTH_TOKEN!,
   },
 });

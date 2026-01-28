@@ -1,4 +1,4 @@
-import { db } from './src/db';
+import { getDb } from './src/db';
 import { sql } from 'drizzle-orm';
 
 async function migrate() {
@@ -17,7 +17,7 @@ async function migrate() {
 
     for (const q of queries) {
       try {
-        await db.run(sql.raw(q));
+        await getDb().run(sql.raw(q));
         console.log(`Executed: ${q}`);
       } catch (e) {
         console.log(`Failed (likely already exists): ${q}`);
@@ -25,11 +25,11 @@ async function migrate() {
     }
 
     // Ensure there is at least one active academic year
-    const activeYear = await db.run(sql`SELECT * FROM academic_years WHERE is_active = 1 LIMIT 1`);
+    const activeYear = await getDb().run(sql`SELECT * FROM academic_years WHERE is_active = 1 LIMIT 1`);
     // @ts-ignore
     if (activeYear.rows && activeYear.rows.length === 0) {
       console.log('Inserting default active academic year...');
-      await db.run(sql`
+      await getDb().run(sql`
         INSERT INTO academic_years (name, start_date, end_date, is_active, created_at)
         VALUES ('2025/2026', '2025-07-01', '2026-06-30', 1, ${new Date().toISOString()})
       `);
