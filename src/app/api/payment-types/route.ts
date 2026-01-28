@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { paymentTypes } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const paymentType = await db
+      const paymentType = await getDb()
         .select()
         .from(paymentTypes)
         .where(eq(paymentTypes.id, parseInt(id)))
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '100'), 1000);
     const offset = parseInt(searchParams.get('offset') ?? '0');
 
-    const results = await db
+    const results = await getDb()
       .select()
       .from(paymentTypes)
       .limit(limit)
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
       }
   
       // Create new payment type
-      const newPaymentType = await db
+      const newPaymentType = await getDb()
         .insert(paymentTypes)
         .values({
           name: name.trim(),
@@ -161,7 +162,7 @@ export async function GET(request: NextRequest) {
       }
   
       // Check if payment type exists
-      const existingPaymentType = await db
+      const existingPaymentType = await getDb()
         .select()
         .from(paymentTypes)
         .where(eq(paymentTypes.id, parseInt(id)))
@@ -225,7 +226,7 @@ export async function GET(request: NextRequest) {
       if (toYear !== undefined) updates.toYear = toYear;
   
       // Update payment type
-      const updatedPaymentType = await db
+      const updatedPaymentType = await getDb()
         .update(paymentTypes)
         .set(updates)
         .where(eq(paymentTypes.id, parseInt(id)))
@@ -255,7 +256,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Check if payment type exists
-    const existingPaymentType = await db
+    const existingPaymentType = await getDb()
       .select()
       .from(paymentTypes)
       .where(eq(paymentTypes.id, parseInt(id)))
@@ -269,7 +270,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete payment type
-    const deleted = await db
+    const deleted = await getDb()
       .delete(paymentTypes)
       .where(eq(paymentTypes.id, parseInt(id)))
       .returning();

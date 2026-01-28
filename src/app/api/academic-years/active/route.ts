@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { academicYears } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
-    const activeAcademicYear = await db.select()
+    const activeAcademicYear = await getDb().select()
       .from(academicYears)
       .where(eq(academicYears.isActive, true))
       .limit(1);

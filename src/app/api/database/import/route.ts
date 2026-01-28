@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { academicYears, classes, students, paymentTypes, payments, schoolInfo } from '@/db/schema';
 import { sql } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,16 +21,16 @@ export async function POST(request: NextRequest) {
     
     // Delete all existing data in correct order (reverse of insertion order)
     console.log('Clearing existing data...');
-    await db.delete(payments);
-    await db.delete(students);
-    await db.delete(paymentTypes);
-    await db.delete(classes);
-    await db.delete(academicYears);
-    await db.delete(schoolInfo);
+    await getDb().delete(payments);
+    await getDb().delete(students);
+    await getDb().delete(paymentTypes);
+    await getDb().delete(classes);
+    await getDb().delete(academicYears);
+    await getDb().delete(schoolInfo);
 
     // Reset autoincrement counters for clean slate
     try {
-      await db.run(sql`DELETE FROM sqlite_sequence WHERE name IN ('payments', 'students', 'payment_types', 'classes', 'academic_years', 'school_info')`);
+      await getDb().run(sql`DELETE FROM sqlite_sequence WHERE name IN ('payments', 'students', 'payment_types', 'classes', 'academic_years', 'school_info')`);
     } catch (e) {
       console.log('Note: sqlite_sequence reset skipped (table might not exist yet)');
     }
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
         return dataWithoutId;
       });
       
-      const results = await db.insert(academicYears).values(batch).returning();
+      const results = await getDb().insert(academicYears).values(batch).returning();
       results.forEach((row, index) => {
         idMaps.academicYears.set(data.academicYears[index].id, row.id);
         imported.academicYears++;
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
         return dataWithoutId;
       });
       
-      const results = await db.insert(classes).values(batch).returning();
+      const results = await getDb().insert(classes).values(batch).returning();
       results.forEach((row, index) => {
         idMaps.classes.set(data.classes[index].id, row.id);
         imported.classes++;
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
         return dataWithoutId;
       });
       
-      const results = await db.insert(paymentTypes).values(batch).returning();
+      const results = await getDb().insert(paymentTypes).values(batch).returning();
       results.forEach((row, index) => {
         idMaps.paymentTypes.set(data.paymentTypes[index].id, row.id);
         imported.paymentTypes++;
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
           }
           return dataWithoutId;
         });
-        const results = await db.insert(students).values(batch).returning();
+        const results = await getDb().insert(students).values(batch).returning();
         results.forEach((row, index) => {
           idMaps.students.set(slice[index].id, row.id);
           imported.students++;
@@ -145,7 +146,7 @@ export async function POST(request: NextRequest) {
           }
           return dataWithoutId;
         });
-        await db.insert(payments).values(batch);
+        await getDb().insert(payments).values(batch);
         imported.payments += batch.length;
       }
     }
@@ -153,7 +154,7 @@ export async function POST(request: NextRequest) {
     // 6. School Info (no dependencies)
     if (data.schoolInfo && Array.isArray(data.schoolInfo) && data.schoolInfo.length > 0) {
       console.log(`Importing ${data.schoolInfo.length} school info records...`);
-      await db.insert(schoolInfo).values(data.schoolInfo.map((item: any) => {
+      await getDb().insert(schoolInfo).values(data.schoolInfo.map((item: any) => {
         const { id, ...dataWithoutId } = item;
         return dataWithoutId;
       }));

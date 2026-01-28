@@ -1,13 +1,20 @@
 
 import { drizzle } from 'drizzle-orm/libsql';
-import { createClient } from '@libsql/client';
+import { createClient, Client } from '@libsql/client';
 import * as schema from '@/db/schema';
 
-const client = createClient({
-  url: process.env.TURSO_CONNECTION_URL!,
-  authToken: process.env.TURSO_AUTH_TOKEN!,
-});
+let cachedDb: ReturnType<typeof drizzle<Client>> | null = null;
 
-export const db = drizzle(client, { schema });
+export function getDb() {
+  if (cachedDb) return cachedDb;
+  const url = process.env.TURSO_CONNECTION_URL;
+  const authToken = process.env.TURSO_AUTH_TOKEN;
+  if (!url || !authToken) {
+    throw new Error('Missing database configuration: TURSO_CONNECTION_URL or TURSO_AUTH_TOKEN');
+  }
+  const client = createClient({ url, authToken });
+  cachedDb = drizzle(client, { schema });
+  return cachedDb;
+}
 
-export type Database = typeof db;
+export type Database = ReturnType<typeof getDb>;

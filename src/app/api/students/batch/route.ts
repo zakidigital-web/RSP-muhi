@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { students } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 interface StudentUpdate {
   id: number;
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
 
     for (const update of body.updates) {
       // Check if student exists
-      const existingStudent = await db.select()
+      const existingStudent = await getDb().select()
         .from(students)
         .where(eq(students.id, update.id))
         .limit(1);
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Update student
-      const updated = await db.update(students)
+      const updated = await getDb().update(students)
         .set(updateData)
         .where(eq(students.id, update.id))
         .returning();

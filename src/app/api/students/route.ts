@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { students } from '@/db/schema';
 import { eq, like, and, or, desc } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const student = await db
+      const student = await getDb()
         .select()
         .from(students)
         .where(eq(students.id, parseInt(id)))
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const classId = searchParams.get('classId');
 
-    let query = db.select().from(students);
+    let query = getDb().select().from(students);
 
     const conditions = [];
 
@@ -142,7 +143,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for unique nis
-    const existingNis = await db
+    const existingNis = await getDb()
       .select()
       .from(students)
       .where(eq(students.nis, body.nis.trim()))
@@ -159,7 +160,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for unique nisn
-    const existingNisn = await db
+    const existingNisn = await getDb()
       .select()
       .from(students)
       .where(eq(students.nisn, body.nisn.trim()))
@@ -177,7 +178,7 @@ export async function POST(request: NextRequest) {
 
     const now = new Date().toISOString();
 
-    const newStudent = await db
+    const newStudent = await getDb()
       .insert(students)
       .values({
         nis: body.nis.trim(),
@@ -222,7 +223,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
 
     // Check if student exists
-    const existingStudent = await db
+    const existingStudent = await getDb()
       .select()
       .from(students)
       .where(eq(students.id, parseInt(id)))
@@ -259,7 +260,7 @@ export async function PUT(request: NextRequest) {
 
     // Check for unique nis if updating
     if (body.nis) {
-      const existingNis = await db
+      const existingNis = await getDb()
         .select()
         .from(students)
         .where(eq(students.nis, body.nis.trim()))
@@ -278,7 +279,7 @@ export async function PUT(request: NextRequest) {
 
     // Check for unique nisn if updating
     if (body.nisn) {
-      const existingNisn = await db
+      const existingNisn = await getDb()
         .select()
         .from(students)
         .where(eq(students.nisn, body.nisn.trim()))
@@ -313,7 +314,7 @@ export async function PUT(request: NextRequest) {
     if (body.parentPhone !== undefined) updateData.parentPhone = body.parentPhone.trim();
     if (body.status !== undefined) updateData.status = body.status;
 
-    const updated = await db
+    const updated = await getDb()
       .update(students)
       .set(updateData)
       .where(eq(students.id, parseInt(id)))
@@ -342,7 +343,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Check if student exists
-    const existingStudent = await db
+    const existingStudent = await getDb()
       .select()
       .from(students)
       .where(eq(students.id, parseInt(id)))
@@ -355,7 +356,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const deleted = await db
+    const deleted = await getDb()
       .delete(students)
       .where(eq(students.id, parseInt(id)))
       .returning();

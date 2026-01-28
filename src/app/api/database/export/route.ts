@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { academicYears, classes, students, paymentTypes, payments, schoolInfo } from '@/db/schema';
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,12 +16,12 @@ export async function POST(request: NextRequest) {
       paymentsData,
       schoolInfoData
     ] = await Promise.all([
-      db.select().from(academicYears),
-      db.select().from(classes),
-      db.select().from(students),
-      db.select().from(paymentTypes),
-      db.select().from(payments),
-      db.select().from(schoolInfo)
+      getDb().select().from(academicYears),
+      getDb().select().from(classes),
+      getDb().select().from(students),
+      getDb().select().from(paymentTypes),
+      getDb().select().from(payments),
+      getDb().select().from(schoolInfo)
     ]);
 
     console.log('Export counts:', {

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { payments } from '@/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 // Helper function to generate receipt number
 function generateReceiptNumber(): string {
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const record = await db
+      const record = await getDb()
         .select()
         .from(payments)
         .where(eq(payments.id, parseInt(id)))
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
     const year = searchParams.get('year');
     const academicYearId = searchParams.get('academicYearId');
 
-    let query = db.select().from(payments);
+    let query = getDb().select().from(payments);
 
     // Build filter conditions
     const conditions = [];
@@ -210,7 +211,7 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    const newPayment = await db
+    const newPayment = await getDb()
       .insert(payments)
       .values(insertData)
       .returning();
@@ -240,7 +241,7 @@ export async function PUT(request: NextRequest) {
     const paymentId = parseInt(id);
 
     // Check if payment exists
-    const existing = await db
+    const existing = await getDb()
       .select()
       .from(payments)
       .where(eq(payments.id, paymentId))
@@ -335,7 +336,7 @@ export async function PUT(request: NextRequest) {
     if (body.remainingAmount !== undefined)
       updateData.remainingAmount = body.remainingAmount;
 
-    const updated = await db
+    const updated = await getDb()
       .update(payments)
       .set(updateData)
       .where(eq(payments.id, paymentId))
@@ -366,7 +367,7 @@ export async function DELETE(request: NextRequest) {
     const paymentId = parseInt(id);
 
     // Check if payment exists
-    const existing = await db
+    const existing = await getDb()
       .select()
       .from(payments)
       .where(eq(payments.id, paymentId))
@@ -379,7 +380,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const deleted = await db
+    const deleted = await getDb()
       .delete(payments)
       .where(eq(payments.id, paymentId))
       .returning();

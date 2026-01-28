@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { payments } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 export async function GET(
   request: NextRequest,
@@ -23,7 +24,7 @@ export async function GET(
     }
 
     // Query payments for the specified student, ordered by paymentDate descending
-    const studentPayments = await db
+    const studentPayments = await getDb()
       .select()
       .from(payments)
       .where(eq(payments.studentId, parsedStudentId))

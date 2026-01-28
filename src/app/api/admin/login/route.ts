@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { adminSettings } from '@/db/schema';
 import { eq, sql } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
     const { password } = await request.json();
 
     // Fetch settings - table is guaranteed to exist by migration/setup
-    const settings = await db.select().from(adminSettings).limit(1);
+    const settings = await getDb().select().from(adminSettings).limit(1);
     
     if (!settings || settings.length === 0) {
       // Fallback if somehow empty
       const now = new Date().toISOString();
-      const [newSettings] = await db.insert(adminSettings).values({
+      const [newSettings] = await getDb().insert(adminSettings).values({
         username: 'admin',
         password: 'gorengan123',
         appName: 'SPP Manager',

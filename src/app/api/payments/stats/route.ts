@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { payments, paymentTypes } from '@/db/schema';
 import { eq, and, sql } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,8 +26,8 @@ export async function GET(request: NextRequest) {
     // Get all payments with filters
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     const allPayments = whereClause
-      ? await db.select().from(payments).where(whereClause)
-      : await db.select().from(payments);
+      ? await getDb().select().from(payments).where(whereClause)
+      : await getDb().select().from(payments);
 
     // Calculate total amount and count
     const totalAmount = allPayments.reduce((sum, payment) => sum + payment.amount, 0);

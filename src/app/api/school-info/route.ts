@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { schoolInfo } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
-    const record = await db.select()
+    const record = await getDb().select()
       .from(schoolInfo)
       .limit(1);
 
@@ -94,13 +95,13 @@ export async function POST(request: NextRequest) {
     };
 
     // Check if school info already exists
-    const existingRecord = await db.select()
+    const existingRecord = await getDb().select()
       .from(schoolInfo)
       .limit(1);
 
     if (existingRecord.length > 0) {
       // Update existing record
-      const updated = await db.update(schoolInfo)
+      const updated = await getDb().update(schoolInfo)
         .set({
           ...sanitizedData,
           updatedAt: new Date().toISOString()
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(updated[0], { status: 200 });
     } else {
       // Create new record
-      const newRecord = await db.insert(schoolInfo)
+      const newRecord = await getDb().insert(schoolInfo)
         .values({
           ...sanitizedData,
           createdAt: new Date().toISOString(),
@@ -157,7 +158,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Check if record exists
-    const existingRecord = await db.select()
+    const existingRecord = await getDb().select()
       .from(schoolInfo)
       .where(eq(schoolInfo.id, parseInt(id)))
       .limit(1);
@@ -183,7 +184,7 @@ export async function PUT(request: NextRequest) {
     if (logo !== undefined) updates.logo = logo ? logo.trim() : null;
 
     // Update record
-    const updated = await db.update(schoolInfo)
+    const updated = await getDb().update(schoolInfo)
       .set(updates)
       .where(eq(schoolInfo.id, parseInt(id)))
       .returning();

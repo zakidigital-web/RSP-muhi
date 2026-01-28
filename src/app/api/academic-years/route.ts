@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { academicYears } from '@/db/schema';
 import { eq, ne, like, or, desc, and } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const academicYear = await db
+      const academicYear = await getDb()
         .select()
         .from(academicYears)
         .where(eq(academicYears.id, parseInt(id)))
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') ?? '0');
     const search = searchParams.get('search');
 
-    let query = db.select().from(academicYears);
+    let query = getDb().select().from(academicYears);
 
     if (search) {
       query = query.where(
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if name already exists
-    const existingAcademicYear = await db
+    const existingAcademicYear = await getDb()
       .select()
       .from(academicYears)
       .where(eq(academicYears.name, name.trim()))
@@ -120,14 +121,14 @@ export async function POST(request: NextRequest) {
 
     // If isActive is true, set all other academic years to false
     if (isActiveValue === true) {
-      await db
+      await getDb()
         .update(academicYears)
         .set({ isActive: false })
         .where(eq(academicYears.isActive, true));
     }
 
     // Create new academic year
-    const newAcademicYear = await db
+    const newAcademicYear = await getDb()
       .insert(academicYears)
       .values({
         name: name.trim(),
@@ -163,7 +164,7 @@ export async function PUT(request: NextRequest) {
     const academicYearId = parseInt(id);
 
     // Check if academic year exists
-    const existingAcademicYear = await db
+    const existingAcademicYear = await getDb()
       .select()
       .from(academicYears)
       .where(eq(academicYears.id, academicYearId))
@@ -213,7 +214,7 @@ export async function PUT(request: NextRequest) {
 
     // Check if name is unique (if being updated)
     if (name !== undefined && name.trim() !== existingAcademicYear[0].name) {
-      const duplicateName = await db
+      const duplicateName = await getDb()
         .select()
         .from(academicYears)
         .where(
@@ -234,7 +235,7 @@ export async function PUT(request: NextRequest) {
 
     // If isActive is being set to true, set all other academic years to false
     if (isActive === true && existingAcademicYear[0].isActive === false) {
-      await db
+      await getDb()
         .update(academicYears)
         .set({ isActive: false })
         .where(ne(academicYears.id, academicYearId));
@@ -248,7 +249,7 @@ export async function PUT(request: NextRequest) {
     if (isActive !== undefined) updateData.isActive = isActive;
 
     // Update academic year
-    const updatedAcademicYear = await db
+    const updatedAcademicYear = await getDb()
       .update(academicYears)
       .set(updateData)
       .where(eq(academicYears.id, academicYearId))
@@ -279,7 +280,7 @@ export async function DELETE(request: NextRequest) {
     const academicYearId = parseInt(id);
 
     // Check if academic year exists
-    const existingAcademicYear = await db
+    const existingAcademicYear = await getDb()
       .select()
       .from(academicYears)
       .where(eq(academicYears.id, academicYearId))
@@ -293,7 +294,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete academic year
-    const deleted = await db
+    const deleted = await getDb()
       .delete(academicYears)
       .where(eq(academicYears.id, academicYearId))
       .returning();

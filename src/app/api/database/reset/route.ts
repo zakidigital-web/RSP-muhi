@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { payments, students, classes, paymentTypes, academicYears, schoolInfo } from '@/db/schema';
 import { sql } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
     // Delete from each table
     for (const { name, table } of tablesToDelete) {
       try {
-        const result = await db.delete(table);
+        const result = await getDb().delete(table);
         tablesCleared.push(name);
         console.log(`✓ Successfully cleared table: ${name}`);
       } catch (error) {
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     // Reset autoincrement counters for clean slate
     try {
-      await db.run(sql`DELETE FROM sqlite_sequence WHERE name IN ('payments', 'students', 'payment_types', 'classes', 'academic_years', 'school_info')`);
+      await getDb().run(sql`DELETE FROM sqlite_sequence WHERE name IN ('payments', 'students', 'payment_types', 'classes', 'academic_years', 'school_info')`);
       console.log('✓ Reset autoincrement counters');
     } catch (error) {
       console.log('Note: sqlite_sequence reset skipped (table might not exist yet)');

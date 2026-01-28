@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { adminSettings } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
-    let settings = await db.select().from(adminSettings).limit(1);
+    let settings = await getDb().select().from(adminSettings).limit(1);
     
     if (settings.length === 0) {
-      const newSettings = await db.insert(adminSettings).values({
+      const newSettings = await getDb().insert(adminSettings).values({
         username: 'admin',
         password: 'gorengan123',
         appName: 'SPP Manager',
@@ -29,10 +30,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { password, appName, appLogo } = body;
 
-    let settings = await db.select().from(adminSettings).limit(1);
+    let settings = await getDb().select().from(adminSettings).limit(1);
     
     if (settings.length === 0) {
-      const newRecord = await db.insert(adminSettings).values({
+      const newRecord = await getDb().insert(adminSettings).values({
         username: 'admin',
         password: password || 'gorengan123',
         appName: appName || 'SPP Manager',
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
       if (appName) updates.appName = appName;
       if (appLogo !== undefined) updates.appLogo = appLogo;
 
-      const updated = await db.update(adminSettings)
+      const updated = await getDb().update(adminSettings)
         .set(updates)
         .where(eq(adminSettings.id, settings[0].id))
         .returning();

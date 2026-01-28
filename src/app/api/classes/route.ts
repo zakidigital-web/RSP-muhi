@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { classes } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      const record = await db
+      const record = await getDb()
         .select()
         .from(classes)
         .where(eq(classes.id, parseInt(id)))
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
     const grade = searchParams.get('grade');
     const academicYearId = searchParams.get('academicYearId');
 
-    let query = db.select().from(classes);
+    let query = getDb().select().from(classes);
 
     // Build filter conditions
     const conditions = [];
@@ -115,7 +116,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new class
-    const newClass = await db
+    const newClass = await getDb()
       .insert(classes)
       .values({
         name: name.trim(),
@@ -151,7 +152,7 @@ export async function PUT(request: NextRequest) {
     const { name, grade, academicYearId } = body;
 
     // Check if class exists
-    const existingClass = await db
+    const existingClass = await getDb()
       .select()
       .from(classes)
       .where(eq(classes.id, parseInt(id)))
@@ -198,7 +199,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Perform update
-    const updated = await db
+    const updated = await getDb()
       .update(classes)
       .set(updates)
       .where(eq(classes.id, parseInt(id)))
@@ -227,7 +228,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Check if class exists
-    const existingClass = await db
+    const existingClass = await getDb()
       .select()
       .from(classes)
       .where(eq(classes.id, parseInt(id)))
@@ -241,7 +242,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete class
-    const deleted = await db
+    const deleted = await getDb()
       .delete(classes)
       .where(eq(classes.id, parseInt(id)))
       .returning();
