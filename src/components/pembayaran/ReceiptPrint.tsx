@@ -409,6 +409,10 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     lines.push(...sepThin());
     lines.push(...text('Terima kasih\r\n'));
     lines.push(...text('Dicetak: ' + new Date().toLocaleString('id-ID') + '\r\n'));
+    lines.push(...sepThin());
+    lines.push(...setAlign(0));
+    lines.push(...text('Bendahara              Kepala Sekolah\r\n'));
+    lines.push(...text('(.....................)   ' + info.principalName + '\r\n'));
     lines.push(...feed(3));
 
     return new Uint8Array(lines);
@@ -547,6 +551,16 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
           <div style="margin-top: 5px; font-size: 9px;">Simpan kuitansi ini sebagai</div>
           <div style="font-size: 9px;">bukti pembayaran yang sah</div>
           <div style="margin-top: 8px; font-size: 9px;">Dicetak: ${new Date().toLocaleString('id-ID')}</div>
+        </div>
+        
+        <div class="thick-line"></div>
+        <div class="row" style="margin-top: 6px;">
+          <span>Bendahara</span>
+          <span>Kepala Sekolah</span>
+        </div>
+        <div class="row" style="margin-top: 28px;">
+          <span>(.....................)</span>
+          <span>${schoolInfo.principalName}</span>
         </div>
         
         <script>
