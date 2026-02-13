@@ -112,11 +112,10 @@ export async function POST(request: NextRequest) {
       } catch {
         const retryData: any = { ...sanitizedData };
         delete retryData.paymentSectionName;
+        delete retryData.logo;
+        delete retryData.updatedAt;
         const updated = await getDb().update(schoolInfo)
-          .set({
-            ...retryData,
-            updatedAt: new Date().toISOString()
-          })
+          .set(retryData)
           .where(eq(schoolInfo.id, existingRecord[0].id))
           .returning();
         return NextResponse.json(updated[0], { status: 200 });
@@ -134,12 +133,18 @@ export async function POST(request: NextRequest) {
       } catch {
         const retryData: any = { ...sanitizedData };
         delete retryData.paymentSectionName;
+        delete retryData.logo;
+        // Minimal fields insert without timestamps (for legacy schema)
+        const minimal: any = {
+          name: retryData.name,
+          address: retryData.address,
+          phone: retryData.phone,
+          email: retryData.email,
+          principalName: retryData.principalName,
+          npsn: retryData.npsn,
+        };
         const newRecord = await getDb().insert(schoolInfo)
-          .values({
-            ...retryData,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          })
+          .values(minimal)
           .returning();
         return NextResponse.json(newRecord[0], { status: 200 });
       }
@@ -215,6 +220,8 @@ export async function PUT(request: NextRequest) {
     } catch {
       const retry: any = { ...updates };
       delete retry.paymentSectionName;
+      delete retry.updatedAt;
+      delete retry.logo;
       const updated = await getDb().update(schoolInfo)
         .set(retry)
         .where(eq(schoolInfo.id, parseInt(id)))

@@ -66,9 +66,10 @@ export function IdentitasSekolah() {
     try {
       await updateSchoolInfo(formData);
       toast.success('Identitas sekolah berhasil disimpan');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving school info:', error);
-      toast.error('Gagal menyimpan identitas sekolah');
+      const msg = typeof error?.message === 'string' ? error.message : 'Terjadi kesalahan tak terduga';
+      toast.error(`Gagal menyimpan identitas sekolah: ${msg}`);
     }
   };
 
