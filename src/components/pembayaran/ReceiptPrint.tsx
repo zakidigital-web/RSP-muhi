@@ -250,10 +250,13 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
       }
 
       const PRINTER_SERVICE_CANDIDATES = [
-        // Banyak printer BLE thermal memakai FFE0/FFE1
         '0000ffe0-0000-1000-8000-00805f9b34fb',
-        // Nordic UART Service (beberapa perangkat)
         '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+        '0000fff0-0000-1000-8000-00805f9b34fb',
+        '0000ff00-0000-1000-8000-00805f9b34fb',
+        '000018f0-0000-1000-8000-00805f9b34fb',
+        '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+        '0000ffe5-0000-1000-8000-00805f9b34fb',
       ];
 
       const device = await navigator.bluetooth.requestDevice({
@@ -288,8 +291,13 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
 
       // Deteksi karakteristik tulis umum
       const CHAR_CANDIDATES = [
-        '0000ffe1-0000-1000-8000-00805f9b34fb', // FFE1
-        '6e400002-b5a3-f393-e0a9-e50e24dcca9e', // NUS TX (write)
+        '0000ffe1-0000-1000-8000-00805f9b34fb',
+        '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
+        '0000ff01-0000-1000-8000-00805f9b34fb',
+        '0000fff1-0000-1000-8000-00805f9b34fb',
+        '49535343-8841-43f4-a8d4-ecbe34729bb3',
+        '49535343-1e4d-4bd9-ba61-23c3393eec01',
+        '0000ffe5-0000-1000-8000-00805f9b34fb',
       ];
 
       let characteristic: BluetoothRemoteGATTCharacteristic | null = null;
@@ -319,8 +327,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
       // Bangun ESC/POS bytes dari data kuitansi
       const bytes = buildEscPosReceipt(payment, schoolInfo);
 
-      // Tulis dalam chunk agar stabil (banyak perangkat limit ~180 bytes)
-      const CHUNK = 180;
+      const CHUNK = 20;
       for (let i = 0; i < bytes.length; i += CHUNK) {
         const slice = bytes.slice(i, i + CHUNK);
         // writeValue atau writeValueWithoutResponse bila tersedia
@@ -330,7 +337,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         } else {
           await characteristic.writeValue(slice);
         }
-        await delay(20);
+        await delay(50);
       }
 
       toast.success('Kuitansi dikirim ke printer via Bluetooth');
@@ -350,7 +357,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
 
     const cmd = (arr: number[]) => arr;
     const text = (t: string) => Array.from(encoder.encode(t));
-    const nl = () => [0x0a];
+    const nl = () => [0x0d, 0x0a];
 
     const setAlign = (n: 0 | 1 | 2) => cmd([ESC, 0x61, n]); // 0:left,1:center,2:right
     const boldOn = () => cmd([ESC, 0x45, 1]);
@@ -359,47 +366,47 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     const dblOn = () => cmd([GS, 0x21, 0x11]); // double height + width
     const dblOff = () => cmd([GS, 0x21, 0x00]);
     const feed = (n: number) => cmd([ESC, 0x64, n]);
-    const sepThin = () => text('--------------------------------\n');
+    const sepThin = () => text('--------------------------------\r\n');
 
     const lines: number[] = [];
     lines.push(...init());
     lines.push(...setAlign(1));
     lines.push(...boldOn());
     lines.push(...dblOn());
-    lines.push(...text(info.name + '\n'));
+    lines.push(...text(info.name + '\r\n'));
     lines.push(...dblOff());
     lines.push(...boldOff());
-    lines.push(...text(info.address + '\n'));
-    lines.push(...text('Telp: ' + info.phone + '\n'));
+    lines.push(...text(info.address + '\r\n'));
+    lines.push(...text('Telp: ' + info.phone + '\r\n'));
     lines.push(...sepThin());
     lines.push(...boldOn());
-    lines.push(...text('KUITANSI PEMBAYARAN\n'));
+    lines.push(...text('KUITANSI PEMBAYARAN\r\n'));
     lines.push(...boldOff());
-    lines.push(...text(p.receiptNumber + '\n'));
+    lines.push(...text(p.receiptNumber + '\r\n'));
     lines.push(...sepThin());
 
     lines.push(...setAlign(0));
-    lines.push(...text('Tanggal   : ' + new Date(p.paymentDate).toLocaleDateString('id-ID') + '\n'));
-    lines.push(...text('NIS       : ' + p.studentNis + '\n'));
-    lines.push(...text('Nama      : ' + p.studentName + '\n'));
-    lines.push(...text('Kelas     : ' + p.className + '\n'));
-    lines.push(...text('Pembayaran: ' + p.paymentTypeName + '\n'));
+    lines.push(...text('Tanggal   : ' + new Date(p.paymentDate).toLocaleDateString('id-ID') + '\r\n'));
+    lines.push(...text('NIS       : ' + p.studentNis + '\r\n'));
+    lines.push(...text('Nama      : ' + p.studentName + '\r\n'));
+    lines.push(...text('Kelas     : ' + p.className + '\r\n'));
+    lines.push(...text('Pembayaran: ' + p.paymentTypeName + '\r\n'));
     if (p.month) {
-      lines.push(...text('Periode   : ' + monthNames[p.month - 1] + ' ' + p.year + '\n'));
+      lines.push(...text('Periode   : ' + monthNames[p.month - 1] + ' ' + p.year + '\r\n'));
     }
     const metode =
       p.paymentMethod === 'cash' ? 'Tunai' : p.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya';
-    lines.push(...text('Metode    : ' + metode + '\n'));
+    lines.push(...text('Metode    : ' + metode + '\r\n'));
 
     lines.push(...sepThin());
     lines.push(...setAlign(1));
     lines.push(...boldOn());
-    lines.push(...text('TOTAL BAYAR\n'));
-    lines.push(...text(formatCurrency(p.amount) + '\n'));
+    lines.push(...text('TOTAL BAYAR\r\n'));
+    lines.push(...text(formatCurrency(p.amount) + '\r\n'));
     lines.push(...boldOff());
     lines.push(...sepThin());
-    lines.push(...text('Terima kasih\n'));
-    lines.push(...text('Dicetak: ' + new Date().toLocaleString('id-ID') + '\n'));
+    lines.push(...text('Terima kasih\r\n'));
+    lines.push(...text('Dicetak: ' + new Date().toLocaleString('id-ID') + '\r\n'));
     lines.push(...feed(3));
 
     return new Uint8Array(lines);
