@@ -30,9 +30,9 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
   
   // Default values if school info not set in DB
   const schoolInfo = dbSchoolInfo || {
-    name: 'SMP Negeri 1',
-    address: 'Jl. Pendidikan No. 1',
-    phone: '021-12345678',
+    name: 'SMP Muhammadiyah 1 Genteng',
+    address: 'Jl. Temuguruh No. 58 Genteng Banyuwangi',
+    phone: '03333 645554',
     email: 'info@smpn1.sch.id',
     principalName: 'Drs. Ahmad Sudirman, M.Pd',
     npsn: '12345678',
@@ -395,22 +395,46 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     const boldOn = () => cmd([ESC, 0x45, 1]);
     const boldOff = () => cmd([ESC, 0x45, 0]);
     const init = () => cmd([ESC, 0x40]);
-    const dblOn = () => cmd([GS, 0x21, 0x11]); // double height + width
-    const dblOff = () => cmd([GS, 0x21, 0x00]);
+    const charSize = (h: 0 | 1, w: 0 | 1) => cmd([GS, 0x21, (h << 4) | w]);
     const feed = (n: number) => cmd([ESC, 0x64, n]);
     const sepThin = () => text('--------------------------------\r\n');
     const setCodePage = (n: number) => cmd([ESC, 0x74, n]); // try CP437
+    const wrapText = (t: string, width: number) => {
+      const words = t.split(' ');
+      const lines: string[] = [];
+      let line = '';
+      for (const w of words) {
+        if ((line + (line ? ' ' : '') + w).length > width) {
+          if (line) lines.push(line);
+          line = w;
+        } else {
+          line = line ? line + ' ' + w : w;
+        }
+      }
+      if (line) lines.push(line);
+      return lines;
+    };
 
     const lines: number[] = [];
     lines.push(...init());
     lines.push(...setCodePage(0));
     lines.push(...setAlign(1));
     lines.push(...boldOn());
-    lines.push(...dblOn());
+    const nameLen = info.name.length;
+    if (nameLen <= 16) {
+      lines.push(...charSize(1, 1));
+    } else if (nameLen <= 24) {
+      lines.push(...charSize(1, 0));
+    } else {
+      lines.push(...charSize(0, 0));
+    }
     lines.push(...text(info.name + '\r\n'));
-    lines.push(...dblOff());
+    lines.push(...charSize(0, 0));
     lines.push(...boldOff());
-    lines.push(...text(info.address + '\r\n'));
+    const addrLines = wrapText(info.address, 32);
+    for (const al of addrLines) {
+      lines.push(...text(al + '\r\n'));
+    }
     lines.push(...text('Telp: ' + info.phone + '\r\n'));
     lines.push(...sepThin());
     lines.push(...boldOn());
@@ -487,11 +511,11 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
             padding-bottom: 5px;
           }
           .header .bold {
-            font-size: 13px;
+            font-size: 12px;
             margin-bottom: 3px;
           }
           .header div {
-            font-size: 10px;
+            font-size: 9px;
             line-height: 1.3;
           }
           .amount { 

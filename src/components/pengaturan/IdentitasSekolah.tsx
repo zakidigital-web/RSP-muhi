@@ -15,9 +15,9 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 export function IdentitasSekolah() {
   const { schoolInfo, isLoading, updateSchoolInfo } = useSchoolInfo();
   const [formData, setFormData] = useState<SchoolInfo>({
-    name: '',
-    address: '',
-    phone: '',
+    name: 'SMP Muhammadiyah 1 Genteng',
+    address: 'Jl. Temuguruh No. 58 Genteng Banyuwangi',
+    phone: '03333 645554',
     email: '',
     principalName: '',
     npsn: '',

@@ -29,10 +29,16 @@ export async function GET(request: NextRequest) {
       .limit(1);
 
     if (record.length === 0) {
-      return NextResponse.json({ 
-        error: 'School info not found',
-        code: 'SCHOOL_INFO_NOT_FOUND' 
-      }, { status: 404 });
+      return NextResponse.json({
+        name: 'SMP Muhammadiyah 1 Genteng',
+        address: 'Jl. Temuguruh No. 58 Genteng Banyuwangi',
+        phone: '03333 645554',
+        email: '',
+        principalName: '',
+        npsn: '',
+        logo: null,
+        paymentSectionName: 'Bagian Pembayaran'
+      }, { status: 200 });
     }
 
     return NextResponse.json(record[0], { status: 200 });
