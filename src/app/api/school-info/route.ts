@@ -95,33 +95,54 @@ export async function POST(request: NextRequest) {
       paymentSectionName: paymentSectionName ? String(paymentSectionName).trim() : null,
     };
 
-    // Check if school info already exists
     const existingRecord = await getDb().select()
       .from(schoolInfo)
       .limit(1);
 
     if (existingRecord.length > 0) {
-      // Update existing record
-      const updated = await getDb().update(schoolInfo)
-        .set({
-          ...sanitizedData,
-          updatedAt: new Date().toISOString()
-        })
-        .where(eq(schoolInfo.id, existingRecord[0].id))
-        .returning();
-
-      return NextResponse.json(updated[0], { status: 200 });
+      try {
+        const updated = await getDb().update(schoolInfo)
+          .set({
+            ...sanitizedData,
+            updatedAt: new Date().toISOString()
+          })
+          .where(eq(schoolInfo.id, existingRecord[0].id))
+          .returning();
+        return NextResponse.json(updated[0], { status: 200 });
+      } catch {
+        const retryData: any = { ...sanitizedData };
+        delete retryData.paymentSectionName;
+        const updated = await getDb().update(schoolInfo)
+          .set({
+            ...retryData,
+            updatedAt: new Date().toISOString()
+          })
+          .where(eq(schoolInfo.id, existingRecord[0].id))
+          .returning();
+        return NextResponse.json(updated[0], { status: 200 });
+      }
     } else {
-      // Create new record
-      const newRecord = await getDb().insert(schoolInfo)
-        .values({
-          ...sanitizedData,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        })
-        .returning();
-
-      return NextResponse.json(newRecord[0], { status: 200 });
+      try {
+        const newRecord = await getDb().insert(schoolInfo)
+          .values({
+            ...sanitizedData,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          })
+          .returning();
+        return NextResponse.json(newRecord[0], { status: 200 });
+      } catch {
+        const retryData: any = { ...sanitizedData };
+        delete retryData.paymentSectionName;
+        const newRecord = await getDb().insert(schoolInfo)
+          .values({
+            ...retryData,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          })
+          .returning();
+        return NextResponse.json(newRecord[0], { status: 200 });
+      }
     }
   } catch (error: any) {
     console.error('POST error:', error);
@@ -185,13 +206,21 @@ export async function PUT(request: NextRequest) {
     if (logo !== undefined) updates.logo = logo ? logo.trim() : null;
     if (paymentSectionName !== undefined) updates.paymentSectionName = paymentSectionName ? String(paymentSectionName).trim() : null;
 
-    // Update record
-    const updated = await getDb().update(schoolInfo)
-      .set(updates)
-      .where(eq(schoolInfo.id, parseInt(id)))
-      .returning();
-
-    return NextResponse.json(updated[0], { status: 200 });
+    try {
+      const updated = await getDb().update(schoolInfo)
+        .set(updates)
+        .where(eq(schoolInfo.id, parseInt(id)))
+        .returning();
+      return NextResponse.json(updated[0], { status: 200 });
+    } catch {
+      const retry: any = { ...updates };
+      delete retry.paymentSectionName;
+      const updated = await getDb().update(schoolInfo)
+        .set(retry)
+        .where(eq(schoolInfo.id, parseInt(id)))
+        .returning();
+      return NextResponse.json(updated[0], { status: 200 });
+    }
   } catch (error: any) {
     console.error('PUT error:', error);
     return NextResponse.json({ 
