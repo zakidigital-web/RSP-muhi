@@ -21,6 +21,7 @@ export function IdentitasSekolah() {
     email: '',
     principalName: '',
     npsn: '',
+    paymentSectionName: '',
   });
 
   useEffect(() => {
@@ -95,12 +96,21 @@ export function IdentitasSekolah() {
                   onChange={(e) => setFormData({ ...formData, npsn: e.target.value })}
                   placeholder="12345678"
                 />
+              
+              <div className="space-y-2">
+                <Label htmlFor="paymentSectionName">Nama Bagian Pembayaran</Label>
+                <Input
+                  id="paymentSectionName"
+                  value={formData.paymentSectionName || ''}
+                  onChange={(e) => setFormData({ ...formData, paymentSectionName: e.target.value })}
+                  placeholder="Keuangan / Bendahara"
+                />
+              </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="address">Alamat</Label>
                 <Textarea
-                  id="address"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   placeholder="Alamat lengkap sekolah"

@@ -30,6 +30,15 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     email: 'info@smpn1.sch.id',
     principalName: 'Drs. Ahmad Sudirman, M.Pd',
     npsn: '12345678',
+    paymentSectionName: 'Bagian Pembayaran',
+  };
+
+  const formatFullDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const day = d.getUTCDate();
+    const month = d.getUTCMonth(); // 0-11
+    const year = d.getUTCFullYear();
+    return `${day} ${monthNames[month]} ${year}`;
   };
 
   const handlePrintA4 = () => {
@@ -388,7 +397,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     lines.push(...sepThin());
 
     lines.push(...setAlign(0));
-    lines.push(...text('Tanggal   : ' + new Date(p.paymentDate).toLocaleDateString('id-ID') + '\r\n'));
+    lines.push(...text('Tanggal   : ' + formatFullDate(p.paymentDate) + '\r\n'));
     lines.push(...text('NIS       : ' + p.studentNis + '\r\n'));
     lines.push(...text('Nama      : ' + p.studentName + '\r\n'));
     lines.push(...text('Kelas     : ' + p.className + '\r\n'));
@@ -411,8 +420,8 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     lines.push(...text('Dicetak: ' + new Date().toLocaleString('id-ID') + '\r\n'));
     lines.push(...sepThin());
     lines.push(...setAlign(0));
-    lines.push(...text('Bendahara              Kepala Sekolah\r\n'));
-    lines.push(...text('(.....................)   ' + info.principalName + '\r\n'));
+    lines.push(...text('TTD Bagian Pembayaran\r\n'));
+    lines.push(...text(`(${info.paymentSectionName || 'Bagian Pembayaran'})\r\n`));
     lines.push(...feed(3));
 
     return new Uint8Array(lines);
@@ -505,7 +514,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         
         <div class="row">
           <span>Tanggal</span>
-          <span>${new Date(payment.paymentDate).toLocaleDateString('id-ID')}</span>
+          <span>${formatFullDate(payment.paymentDate)}</span>
         </div>
         <div class="row">
           <span>NIS</span>
@@ -555,12 +564,12 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         
         <div class="thick-line"></div>
         <div class="row" style="margin-top: 6px;">
-          <span>Bendahara</span>
-          <span>Kepala Sekolah</span>
+          <span>Penyetor</span>
+          <span>TTD Bagian Pembayaran</span>
         </div>
         <div class="row" style="margin-top: 28px;">
-          <span>(.....................)</span>
-          <span>${schoolInfo.principalName}</span>
+          <span>( ${payment.studentName} )</span>
+          <span>( ${schoolInfo.paymentSectionName} )</span>
         </div>
         
         <script>

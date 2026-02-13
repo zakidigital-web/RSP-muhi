@@ -91,6 +91,7 @@ export const schoolInfo = sqliteTable('school_info', {
   principalName: text('principal_name').notNull(),
   npsn: text('npsn').notNull(),
   logo: text('logo'),
+  paymentSectionName: text('payment_section_name'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

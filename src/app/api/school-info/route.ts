@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, address, phone, email, principalName, npsn, logo } = body;
+    const { name, address, phone, email, principalName, npsn, logo, paymentSectionName } = body;
 
     // Validate required fields
     if (!name) {
@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
       principalName: principalName.trim(),
       npsn: npsn.trim(),
       logo: logo ? logo.trim() : null,
+      paymentSectionName: paymentSectionName ? String(paymentSectionName).trim() : null,
     };
 
     // Check if school info already exists
@@ -144,7 +145,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, address, phone, email, principalName, npsn, logo } = body;
+    const { name, address, phone, email, principalName, npsn, logo, paymentSectionName } = body;
 
     // Validate email format if provided
     if (email) {
@@ -182,6 +183,7 @@ export async function PUT(request: NextRequest) {
     if (principalName !== undefined) updates.principalName = principalName.trim();
     if (npsn !== undefined) updates.npsn = npsn.trim();
     if (logo !== undefined) updates.logo = logo ? logo.trim() : null;
+    if (paymentSectionName !== undefined) updates.paymentSectionName = paymentSectionName ? String(paymentSectionName).trim() : null;
 
     // Update record
     const updated = await getDb().update(schoolInfo)

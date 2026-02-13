@@ -88,6 +88,7 @@ export interface SchoolInfo {
   principalName: string;
   npsn: string; // Nomor Pokok Sekolah Nasional
   logo?: string;
+  paymentSectionName?: string;
 }
 
 export interface DashboardStats {

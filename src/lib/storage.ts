@@ -207,6 +207,7 @@ export function getSchoolInfo(): SchoolInfo {
     email: 'info@smpn1.sch.id',
     principalName: 'Drs. Ahmad Sudirman, M.Pd',
     npsn: '12345678',
+    paymentSectionName: 'Bagian Pembayaran',
   });
 }
 
