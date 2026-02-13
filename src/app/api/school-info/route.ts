@@ -1,11 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/db';
 import { schoolInfo } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 export const runtime = 'nodejs';
+
+async function ensureSchoolInfoSchema() {
+  const db = getDb();
+  const statements = [
+    sql`ALTER TABLE school_info ADD COLUMN logo TEXT`,
+    sql`ALTER TABLE school_info ADD COLUMN payment_section_name TEXT`,
+    sql`ALTER TABLE school_info ADD COLUMN created_at TEXT`,
+    sql`ALTER TABLE school_info ADD COLUMN updated_at TEXT`,
+  ];
+  for (const stmt of statements) {
+    try {
+      await db.run(stmt);
+    } catch {
+      // ignore if column already exists or alter not supported
+    }
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
+    await ensureSchoolInfoSchema();
     const record = await getDb().select()
       .from(schoolInfo)
       .limit(1);
@@ -28,6 +46,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await ensureSchoolInfoSchema();
     const body = await request.json();
     const { name, address, phone, email, principalName, npsn, logo, paymentSectionName } = body;
 
@@ -95,58 +114,58 @@ export async function POST(request: NextRequest) {
       paymentSectionName: paymentSectionName ? String(paymentSectionName).trim() : null,
     };
 
-    const existingRecord = await getDb().select()
-      .from(schoolInfo)
-      .limit(1);
+    const existingRecord = await getDb().select().from(schoolInfo).limit(1);
 
     if (existingRecord.length > 0) {
+      const now = new Date().toISOString();
       try {
-        const updated = await getDb().update(schoolInfo)
-          .set({
-            ...sanitizedData,
-            updatedAt: new Date().toISOString()
-          })
-          .where(eq(schoolInfo.id, existingRecord[0].id))
-          .returning();
-        return NextResponse.json(updated[0], { status: 200 });
+        await getDb().run(sql`
+          UPDATE school_info 
+          SET 
+            name = ${sanitizedData.name},
+            address = ${sanitizedData.address},
+            phone = ${sanitizedData.phone},
+            email = ${sanitizedData.email},
+            principal_name = ${sanitizedData.principalName},
+            npsn = ${sanitizedData.npsn},
+            logo = ${sanitizedData.logo},
+            payment_section_name = ${sanitizedData.paymentSectionName},
+            updated_at = ${now}
+          WHERE id = ${existingRecord[0].id}
+        `);
+        return NextResponse.json({ ...existingRecord[0], ...sanitizedData, updatedAt: now }, { status: 200 });
       } catch {
-        const retryData: any = { ...sanitizedData };
-        delete retryData.paymentSectionName;
-        delete retryData.logo;
-        delete retryData.updatedAt;
-        const updated = await getDb().update(schoolInfo)
-          .set(retryData)
-          .where(eq(schoolInfo.id, existingRecord[0].id))
-          .returning();
-        return NextResponse.json(updated[0], { status: 200 });
+        await getDb().run(sql`
+          UPDATE school_info 
+          SET 
+            name = ${sanitizedData.name},
+            address = ${sanitizedData.address},
+            phone = ${sanitizedData.phone},
+            email = ${sanitizedData.email},
+            principal_name = ${sanitizedData.principalName},
+            npsn = ${sanitizedData.npsn}
+          WHERE id = ${existingRecord[0].id}
+        `);
+        return NextResponse.json({ ...existingRecord[0], ...sanitizedData }, { status: 200 });
       }
     } else {
+      const now = new Date().toISOString();
       try {
-        const newRecord = await getDb().insert(schoolInfo)
-          .values({
-            ...sanitizedData,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          })
-          .returning();
-        return NextResponse.json(newRecord[0], { status: 200 });
+        await getDb().run(sql`
+          INSERT INTO school_info 
+            (name, address, phone, email, principal_name, npsn, logo, payment_section_name, created_at, updated_at)
+          VALUES 
+            (${sanitizedData.name}, ${sanitizedData.address}, ${sanitizedData.phone}, ${sanitizedData.email}, ${sanitizedData.principalName}, ${sanitizedData.npsn}, ${sanitizedData.logo}, ${sanitizedData.paymentSectionName}, ${now}, ${now})
+        `);
+        return NextResponse.json({ ...sanitizedData, createdAt: now, updatedAt: now }, { status: 200 });
       } catch {
-        const retryData: any = { ...sanitizedData };
-        delete retryData.paymentSectionName;
-        delete retryData.logo;
-        // Minimal fields insert without timestamps (for legacy schema)
-        const minimal: any = {
-          name: retryData.name,
-          address: retryData.address,
-          phone: retryData.phone,
-          email: retryData.email,
-          principalName: retryData.principalName,
-          npsn: retryData.npsn,
-        };
-        const newRecord = await getDb().insert(schoolInfo)
-          .values(minimal)
-          .returning();
-        return NextResponse.json(newRecord[0], { status: 200 });
+        await getDb().run(sql`
+          INSERT INTO school_info 
+            (name, address, phone, email, principal_name, npsn)
+          VALUES 
+            (${sanitizedData.name}, ${sanitizedData.address}, ${sanitizedData.phone}, ${sanitizedData.email}, ${sanitizedData.principalName}, ${sanitizedData.npsn})
+        `);
+        return NextResponse.json(sanitizedData, { status: 200 });
       }
     }
   } catch (error: any) {
@@ -159,6 +178,7 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    await ensureSchoolInfoSchema();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
@@ -212,21 +232,34 @@ export async function PUT(request: NextRequest) {
     if (paymentSectionName !== undefined) updates.paymentSectionName = paymentSectionName ? String(paymentSectionName).trim() : null;
 
     try {
-      const updated = await getDb().update(schoolInfo)
-        .set(updates)
-        .where(eq(schoolInfo.id, parseInt(id)))
-        .returning();
-      return NextResponse.json(updated[0], { status: 200 });
+      await getDb().run(sql`
+        UPDATE school_info 
+        SET 
+          name = COALESCE(${updates.name}, name),
+          address = COALESCE(${updates.address}, address),
+          phone = COALESCE(${updates.phone}, phone),
+          email = COALESCE(${updates.email}, email),
+          principal_name = COALESCE(${updates.principalName}, principal_name),
+          npsn = COALESCE(${updates.npsn}, npsn),
+          logo = ${updates.logo},
+          payment_section_name = ${updates.paymentSectionName},
+          updated_at = ${updates.updatedAt}
+        WHERE id = ${parseInt(id)}
+      `);
+      return NextResponse.json({ ...existingRecord[0], ...updates }, { status: 200 });
     } catch {
-      const retry: any = { ...updates };
-      delete retry.paymentSectionName;
-      delete retry.updatedAt;
-      delete retry.logo;
-      const updated = await getDb().update(schoolInfo)
-        .set(retry)
-        .where(eq(schoolInfo.id, parseInt(id)))
-        .returning();
-      return NextResponse.json(updated[0], { status: 200 });
+      await getDb().run(sql`
+        UPDATE school_info 
+        SET 
+          name = COALESCE(${updates.name}, name),
+          address = COALESCE(${updates.address}, address),
+          phone = COALESCE(${updates.phone}, phone),
+          email = COALESCE(${updates.email}, email),
+          principal_name = COALESCE(${updates.principalName}, principal_name),
+          npsn = COALESCE(${updates.npsn}, npsn)
+        WHERE id = ${parseInt(id)}
+      `);
+      return NextResponse.json({ ...existingRecord[0], ...updates }, { status: 200 });
     }
   } catch (error: any) {
     console.error('PUT error:', error);
