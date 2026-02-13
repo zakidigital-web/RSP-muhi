@@ -1,11 +1,12 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Printer, FileText } from 'lucide-react';
+import { Printer, FileText, Bluetooth } from 'lucide-react';
 import { Payment } from '@/lib/types';
 import { useSchoolInfo } from '@/hooks/useSchoolInfo';
 import { monthNames as globalMonthNames, getMonthName } from '@/lib/utils/date';
 import { formatCurrency, numberToWords } from '@/lib/utils/currency';
+import { toast } from 'sonner';
 
 // Fallback for monthNames if the import fails or is undefined during runtime
 const monthNames = globalMonthNames || [
@@ -235,6 +236,173 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     `;
 
     printContent(content, 'A4');
+  };
+
+  const handlePrintBluetooth = async () => {
+    try {
+      if (!('bluetooth' in navigator)) {
+        toast.error('Browser tidak mendukung Web Bluetooth');
+        return;
+      }
+      if (!isSecureContext) {
+        toast.error('Web Bluetooth butuh HTTPS atau localhost');
+        return;
+      }
+
+      const PRINTER_SERVICE_CANDIDATES = [
+        // Banyak printer BLE thermal memakai FFE0/FFE1
+        '0000ffe0-0000-1000-8000-00805f9b34fb',
+        // Nordic UART Service (beberapa perangkat)
+        '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+      ];
+
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: PRINTER_SERVICE_CANDIDATES,
+      });
+
+      const server = await device.gatt?.connect();
+      if (!server) {
+        toast.error('Gagal terhubung ke perangkat');
+        return;
+      }
+
+      // Cari service yang tersedia dari kandidat
+      let service = null as BluetoothRemoteGATTService | null;
+      for (const uuid of PRINTER_SERVICE_CANDIDATES) {
+        try {
+          const s = await server.getPrimaryService(uuid);
+          if (s) {
+            service = s;
+            break;
+          }
+        } catch {
+          // continue
+        }
+      }
+      if (!service) {
+        toast.error('Service printer BLE tidak ditemukan (FFE0/NUS)');
+        await server.device.gatt?.disconnect();
+        return;
+      }
+
+      // Deteksi karakteristik tulis umum
+      const CHAR_CANDIDATES = [
+        '0000ffe1-0000-1000-8000-00805f9b34fb', // FFE1
+        '6e400002-b5a3-f393-e0a9-e50e24dcca9e', // NUS TX (write)
+      ];
+
+      let characteristic: BluetoothRemoteGATTCharacteristic | null = null;
+      for (const cu of CHAR_CANDIDATES) {
+        try {
+          const c = await service.getCharacteristic(cu);
+          if (c && (c.properties.write || c.properties.writeWithoutResponse)) {
+            characteristic = c;
+            break;
+          }
+        } catch {
+          // continue
+        }
+      }
+      // Jika kandidat gagal, ambil semua characteristic dan pilih yang bisa write
+      if (!characteristic) {
+        const chars = await service.getCharacteristics();
+        characteristic =
+          chars.find((c) => c.properties.write || c.properties.writeWithoutResponse) ?? null;
+      }
+      if (!characteristic) {
+        toast.error('Characteristic untuk tulis tidak ditemukan');
+        await server.device.gatt?.disconnect();
+        return;
+      }
+
+      // Bangun ESC/POS bytes dari data kuitansi
+      const bytes = buildEscPosReceipt(payment, schoolInfo);
+
+      // Tulis dalam chunk agar stabil (banyak perangkat limit ~180 bytes)
+      const CHUNK = 180;
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        const slice = bytes.slice(i, i + CHUNK);
+        // writeValue atau writeValueWithoutResponse bila tersedia
+        if ('writeValueWithoutResponse' in characteristic && characteristic.properties.writeWithoutResponse) {
+          // @ts-ignore
+          await characteristic.writeValueWithoutResponse(slice);
+        } else {
+          await characteristic.writeValue(slice);
+        }
+        await delay(20);
+      }
+
+      toast.success('Kuitansi dikirim ke printer via Bluetooth');
+      await server.device.gatt?.disconnect();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Gagal cetak Bluetooth: ${msg}`);
+    }
+  };
+
+  const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+  const buildEscPosReceipt = (p: Payment, info: typeof schoolInfo) => {
+    const ESC = 0x1b;
+    const GS = 0x1d;
+    const encoder = new TextEncoder(); // UTF-8; kebanyakan printer modern kompatibel
+
+    const cmd = (arr: number[]) => arr;
+    const text = (t: string) => Array.from(encoder.encode(t));
+    const nl = () => [0x0a];
+
+    const setAlign = (n: 0 | 1 | 2) => cmd([ESC, 0x61, n]); // 0:left,1:center,2:right
+    const boldOn = () => cmd([ESC, 0x45, 1]);
+    const boldOff = () => cmd([ESC, 0x45, 0]);
+    const init = () => cmd([ESC, 0x40]);
+    const dblOn = () => cmd([GS, 0x21, 0x11]); // double height + width
+    const dblOff = () => cmd([GS, 0x21, 0x00]);
+    const feed = (n: number) => cmd([ESC, 0x64, n]);
+    const sepThin = () => text('--------------------------------\n');
+
+    const lines: number[] = [];
+    lines.push(...init());
+    lines.push(...setAlign(1));
+    lines.push(...boldOn());
+    lines.push(...dblOn());
+    lines.push(...text(info.name + '\n'));
+    lines.push(...dblOff());
+    lines.push(...boldOff());
+    lines.push(...text(info.address + '\n'));
+    lines.push(...text('Telp: ' + info.phone + '\n'));
+    lines.push(...sepThin());
+    lines.push(...boldOn());
+    lines.push(...text('KUITANSI PEMBAYARAN\n'));
+    lines.push(...boldOff());
+    lines.push(...text(p.receiptNumber + '\n'));
+    lines.push(...sepThin());
+
+    lines.push(...setAlign(0));
+    lines.push(...text('Tanggal   : ' + new Date(p.paymentDate).toLocaleDateString('id-ID') + '\n'));
+    lines.push(...text('NIS       : ' + p.studentNis + '\n'));
+    lines.push(...text('Nama      : ' + p.studentName + '\n'));
+    lines.push(...text('Kelas     : ' + p.className + '\n'));
+    lines.push(...text('Pembayaran: ' + p.paymentTypeName + '\n'));
+    if (p.month) {
+      lines.push(...text('Periode   : ' + monthNames[p.month - 1] + ' ' + p.year + '\n'));
+    }
+    const metode =
+      p.paymentMethod === 'cash' ? 'Tunai' : p.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya';
+    lines.push(...text('Metode    : ' + metode + '\n'));
+
+    lines.push(...sepThin());
+    lines.push(...setAlign(1));
+    lines.push(...boldOn());
+    lines.push(...text('TOTAL BAYAR\n'));
+    lines.push(...text(formatCurrency(p.amount) + '\n'));
+    lines.push(...boldOff());
+    lines.push(...sepThin());
+    lines.push(...text('Terima kasih\n'));
+    lines.push(...text('Dicetak: ' + new Date().toLocaleString('id-ID') + '\n'));
+    lines.push(...feed(3));
+
+    return new Uint8Array(lines);
   };
 
   const handlePrintThermal = () => {
@@ -551,6 +719,10 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         <Button onClick={handlePrintThermal} variant="outline" className="flex-1" size="lg">
           <Printer className="mr-2 h-4 w-4" />
           Cetak Thermal
+        </Button>
+        <Button onClick={handlePrintBluetooth} variant="secondary" className="flex-1" size="lg">
+          <Bluetooth className="mr-2 h-4 w-4" />
+          Cetak via Bluetooth
         </Button>
       </div>
       <Button variant="ghost" onClick={onClose} className="w-full">
