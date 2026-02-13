@@ -7,6 +7,7 @@ import { useSchoolInfo } from '@/hooks/useSchoolInfo';
 import { monthNames as globalMonthNames, getMonthName } from '@/lib/utils/date';
 import { formatCurrency, numberToWords } from '@/lib/utils/currency';
 import { toast } from 'sonner';
+import { useRef } from 'react';
 
 // Fallback for monthNames if the import fails or is undefined during runtime
 const monthNames = globalMonthNames || [
@@ -21,6 +22,11 @@ interface ReceiptPrintProps {
 
 export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
   const { schoolInfo: dbSchoolInfo, isLoading } = useSchoolInfo();
+  const bleRef = useRef<{
+    device?: BluetoothDevice;
+    server?: BluetoothRemoteGATTServer;
+    characteristic?: BluetoothRemoteGATTCharacteristic;
+  } | null>(null);
   
   // Default values if school info not set in DB
   const schoolInfo = dbSchoolInfo || {
@@ -269,12 +275,26 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         '0000ffe5-0000-1000-8000-00805f9b34fb',
       ];
 
-      const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: PRINTER_SERVICE_CANDIDATES,
-      });
+      let device: BluetoothDevice | undefined = bleRef.current?.device;
+      let server: BluetoothRemoteGATTServer | undefined = bleRef.current?.server ?? undefined;
+      let characteristic: BluetoothRemoteGATTCharacteristic | null = bleRef.current?.characteristic ?? null;
 
-      const server = await device.gatt?.connect();
+      if (!characteristic) {
+        const savedId = localStorage.getItem('btPrinterId');
+        if (navigator.bluetooth.getDevices) {
+          const known = await navigator.bluetooth.getDevices();
+          const matched = savedId ? known.find((d) => d.id === savedId) : undefined;
+          device = matched || device;
+        }
+        if (!device) {
+          device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: PRINTER_SERVICE_CANDIDATES,
+          });
+          localStorage.setItem('btPrinterId', device.id);
+        }
+        server = await device.gatt?.connect();
+      }
       if (!server) {
         toast.error('Gagal terhubung ke perangkat');
         return;
@@ -311,27 +331,27 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         '0000ffe5-0000-1000-8000-00805f9b34fb',
       ];
 
-      let characteristic: BluetoothRemoteGATTCharacteristic | null = null;
-      for (const cu of CHAR_CANDIDATES) {
-        try {
-          const c = await service.getCharacteristic(cu);
-          if (c && (c.properties.write || c.properties.writeWithoutResponse)) {
-            characteristic = c;
-            break;
-          }
-        } catch {
-          // continue
-        }
-      }
-      // Jika kandidat gagal, ambil semua characteristic dan pilih yang bisa write
       if (!characteristic) {
-        const chars = await service.getCharacteristics();
-        characteristic =
-          chars.find((c) => c.properties.write || c.properties.writeWithoutResponse) ?? null;
+        for (const cu of CHAR_CANDIDATES) {
+          try {
+            const c = await service.getCharacteristic(cu);
+            if (c && (c.properties.write || c.properties.writeWithoutResponse)) {
+              characteristic = c;
+              break;
+            }
+          } catch {
+            // continue
+          }
+        }
+        // Jika kandidat gagal, ambil semua characteristic dan pilih yang bisa write
+        if (!characteristic) {
+          const chars = await service.getCharacteristics();
+          characteristic =
+            chars.find((c) => c.properties.write || c.properties.writeWithoutResponse) ?? null;
+        }
       }
       if (!characteristic) {
         toast.error('Characteristic untuk tulis tidak ditemukan');
-        await server.device.gatt?.disconnect();
         return;
       }
 
@@ -352,7 +372,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
       }
 
       toast.success(`Kuitansi dikirim ke printer: ${device.name || 'Perangkat'}`);
-      await server.device.gatt?.disconnect();
+      bleRef.current = { device, server, characteristic };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`Gagal cetak Bluetooth: ${msg}`);
@@ -365,6 +385,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     const ESC = 0x1b;
     const GS = 0x1d;
     const encoder = new TextEncoder(); // UTF-8; kebanyakan printer modern kompatibel
+    const safeCurrency = (amount: number) => formatCurrency(amount).replace(/\u00A0/g, ' ');
 
     const cmd = (arr: number[]) => arr;
     const text = (t: string) => Array.from(encoder.encode(t));
@@ -378,9 +399,11 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     const dblOff = () => cmd([GS, 0x21, 0x00]);
     const feed = (n: number) => cmd([ESC, 0x64, n]);
     const sepThin = () => text('--------------------------------\r\n');
+    const setCodePage = (n: number) => cmd([ESC, 0x74, n]); // try CP437
 
     const lines: number[] = [];
     lines.push(...init());
+    lines.push(...setCodePage(0));
     lines.push(...setAlign(1));
     lines.push(...boldOn());
     lines.push(...dblOn());
@@ -413,8 +436,8 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     lines.push(...setAlign(1));
     lines.push(...boldOn());
     lines.push(...text('TOTAL BAYAR\r\n'));
-    lines.push(...text(formatCurrency(p.amount) + '\r\n'));
     lines.push(...boldOff());
+    lines.push(...text(safeCurrency(p.amount) + '\r\n'));
     lines.push(...sepThin());
     lines.push(...text('Terima kasih\r\n'));
     lines.push(...text('Dicetak: ' + new Date().toLocaleString('id-ID') + '\r\n'));
