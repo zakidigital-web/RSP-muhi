@@ -37,6 +37,31 @@ export function IdentitasSekolah() {
       toast.error('Nama sekolah wajib diisi');
       return;
     }
+    if (!formData.address) {
+      toast.error('Alamat sekolah wajib diisi');
+      return;
+    }
+    if (!formData.phone) {
+      toast.error('Nomor telepon sekolah wajib diisi');
+      return;
+    }
+    if (!formData.email) {
+      toast.error('Email sekolah wajib diisi');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error('Format email tidak valid');
+      return;
+    }
+    if (!formData.principalName) {
+      toast.error('Nama Kepala Sekolah wajib diisi');
+      return;
+    }
+    if (!formData.npsn) {
+      toast.error('NPSN wajib diisi');
+      return;
+    }
 
     try {
       await updateSchoolInfo(formData);
