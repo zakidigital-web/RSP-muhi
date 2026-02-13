@@ -252,10 +252,11 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
       const PRINTER_SERVICE_CANDIDATES = [
         '0000ffe0-0000-1000-8000-00805f9b34fb',
         '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
-        '0000fff0-0000-1000-8000-00805f9b34fb',
         '0000ff00-0000-1000-8000-00805f9b34fb',
+        '0000fff0-0000-1000-8000-00805f9b34fb',
         '000018f0-0000-1000-8000-00805f9b34fb',
         '49535343-fe7d-4ae5-8fa9-9fafd205e455',
+        '0000ae00-0000-1000-8000-00805f9b34fb',
         '0000ffe5-0000-1000-8000-00805f9b34fb',
       ];
 
@@ -297,6 +298,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         '0000fff1-0000-1000-8000-00805f9b34fb',
         '49535343-8841-43f4-a8d4-ecbe34729bb3',
         '49535343-1e4d-4bd9-ba61-23c3393eec01',
+        '0000ae01-0000-1000-8000-00805f9b34fb',
         '0000ffe5-0000-1000-8000-00805f9b34fb',
       ];
 
@@ -340,7 +342,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         await delay(50);
       }
 
-      toast.success('Kuitansi dikirim ke printer via Bluetooth');
+      toast.success(`Kuitansi dikirim ke printer: ${device.name || 'Perangkat'}`);
       await server.device.gatt?.disconnect();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -570,48 +572,10 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
   };
 
   const printContent = (htmlContent: string, type: 'A4' | 'thermal') => {
-    // Create blob and object URL
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-    const blobUrl = URL.createObjectURL(blob);
-    
-    // Check if we're in an iframe
-    const isInIframe = window.self !== window.top;
-    
-    if (isInIframe) {
-      // In iframe: use hidden iframe method
-      printWithHiddenIframe(htmlContent, blobUrl);
-    } else {
-      // Not in iframe: try popup window first
-      const width = type === 'thermal' ? 350 : 800;
-      const height = 600;
-      const left = (screen.width - width) / 2;
-      const top = (screen.height - height) / 2;
-      
-      try {
-        const printWindow = window.open(
-          blobUrl, 
-          '_blank',
-          `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
-        );
-        
-        if (printWindow) {
-          // Cleanup blob URL after window loads
-          printWindow.addEventListener('load', () => {
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-          });
-        } else {
-          // Popup blocked, fallback to iframe
-          printWithHiddenIframe(htmlContent, blobUrl);
-        }
-      } catch (error) {
-        // Error opening popup, fallback to iframe
-        printWithHiddenIframe(htmlContent, blobUrl);
-      }
-    }
+    printWithHiddenIframe(htmlContent);
   };
 
   const printWithHiddenIframe = (htmlContent: string, blobUrl?: string) => {
-    // Create hidden iframe
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.top = '-10000px';
@@ -717,17 +681,16 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         </div>
       </div>
 
-      {/* Print Buttons */}
-      <div className="flex gap-2">
-        <Button onClick={handlePrintA4} className="flex-1" size="lg">
+      <div className="flex flex-col sm:flex-row gap-2">
+        <Button onClick={handlePrintA4} className="flex-1 w-full" size="lg">
           <FileText className="mr-2 h-4 w-4" />
           Cetak A4
         </Button>
-        <Button onClick={handlePrintThermal} variant="outline" className="flex-1" size="lg">
+        <Button onClick={handlePrintThermal} variant="outline" className="flex-1 w-full" size="lg">
           <Printer className="mr-2 h-4 w-4" />
           Cetak Thermal
         </Button>
-        <Button onClick={handlePrintBluetooth} variant="secondary" className="flex-1" size="lg">
+        <Button onClick={handlePrintBluetooth} variant="secondary" className="flex-1 w-full" size="lg">
           <Bluetooth className="mr-2 h-4 w-4" />
           Cetak via Bluetooth
         </Button>
