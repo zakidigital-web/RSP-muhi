@@ -103,6 +103,18 @@ export const adminSettings = sqliteTable('admin_settings', {
   password: text('password').notNull().default('gorengan123'),
   appName: text('app_name').notNull().default('SPP Manager'),
   appLogo: text('app_logo'),
+  showLoginHint: integer('show_login_hint', { mode: 'boolean' }).default(true),
+  loginHintText: text('login_hint_text').default('Hubungi administrator untuk mendapatkan password.'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+// Admin users table (multi-admin support)
+export const adminUsers = sqliteTable('admin_users', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  password: text('password').notNull(),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

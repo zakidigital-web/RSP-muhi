@@ -121,25 +121,19 @@ export function AdminSettings() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Lock className="h-5 w-5 text-orange-500" />
-              <CardTitle>Keamanan Admin</CardTitle>
+              <CardTitle>Keamanan &amp; Multi-Admin</CardTitle>
             </div>
             <CardDescription>
-              Ganti password untuk masuk ke aplikasi
+              Kelola akun admin dan password di bagian Manajemen Admin di bawah
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="password">Password Baru</Label>
-              <Input
-                id="password"
-                type="text"
-                value={settings.password}
-                onChange={(e) => setSettings({ ...settings, password: e.target.value })}
-                placeholder="Password Baru"
-              />
-            </div>
-            <div className="rounded-lg bg-orange-50 p-3 border border-orange-100">
-              <p className="text-xs text-orange-700"><strong>Catatan:</strong> Jangan berikan password ini kepada siapapun selain pengelola keuangan.</p>
+          <CardContent>
+            <div className="rounded-lg bg-orange-50 p-4 border border-orange-100 space-y-1">
+              <p className="text-sm font-medium text-orange-800">📋 Manajemen Admin Baru</p>
+              <p className="text-xs text-orange-700">
+                Pengelolaan password dan akun admin (Admin 1, Admin 2, Admin 3) kini tersedia di bagian <strong>Manajemen Admin</strong> di bawah halaman ini.
+                Setiap admin memiliki nama yang akan tercatat di setiap transaksi pembayaran.
+              </p>
             </div>
           </CardContent>
         </Card>

@@ -1,35 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/db';
-import { adminSettings } from '@/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { adminUsers } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
     const { password } = await request.json();
 
-    // Fetch settings - table is guaranteed to exist by migration/setup
-    const settings = await getDb().select().from(adminSettings).limit(1);
-    
-    if (!settings || settings.length === 0) {
-      // Fallback if somehow empty
-      const now = new Date().toISOString();
-      const [newSettings] = await getDb().insert(adminSettings).values({
-        username: 'admin',
-        password: 'gorengan123',
-        appName: 'SPP Manager',
-        createdAt: now,
-        updatedAt: now,
-      }).returning();
-      
-      if (password === newSettings.password) {
-        return NextResponse.json({ success: true });
-      }
-    } else if (password === settings[0].password) {
-      return NextResponse.json({ success: true });
+    if (!password) {
+      return NextResponse.json({ error: 'Password wajib diisi' }, { status: 400 });
     }
 
-    return NextResponse.json({ error: 'Password salah' }, { status: 401 });
+    // Find matching active admin by password
+    const db = getDb();
+    const allAdmins = await db.select().from(adminUsers).where(eq(adminUsers.isActive, true));
+
+    // Ensure there are default admins if table is empty
+    if (allAdmins.length === 0) {
+      const now = new Date().toISOString();
+      await db.insert(adminUsers).values([
+        { name: 'Admin 1', password: 'admin1234', isActive: true, createdAt: now, updatedAt: now },
+        { name: 'Admin 2', password: 'admin5678', isActive: true, createdAt: now, updatedAt: now },
+        { name: 'Admin 3', password: 'admin9012', isActive: true, createdAt: now, updatedAt: now },
+      ]);
+      // Try again after seeding
+      const seeded = await db.select().from(adminUsers).where(eq(adminUsers.isActive, true));
+      const matched = seeded.find((a) => a.password === password);
+      if (matched) {
+        return NextResponse.json({ success: true, adminId: matched.id, adminName: matched.name });
+      }
+    } else {
+      const matched = allAdmins.find((a) => a.password === password);
+      if (matched) {
+        return NextResponse.json({ success: true, adminId: matched.id, adminName: matched.name });
+      }
+    }
+
+    return NextResponse.json({ error: 'Password salah atau akun tidak aktif' }, { status: 401 });
   } catch (error: any) {
     console.error('Login API error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
