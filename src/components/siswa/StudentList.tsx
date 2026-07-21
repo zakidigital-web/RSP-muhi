@@ -48,7 +48,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 // Updated type to match database schema (integer id)
 interface Student {
   id: number;
-  nis: string;
+  nis?: string | null;
   nisn: string;
   name: string;
   gender: 'L' | 'P';
@@ -102,7 +102,7 @@ export function StudentList() {
   const filteredStudents = students.filter(student => {
     const matchSearch = 
       student.name.toLowerCase().includes(search.toLowerCase()) ||
-      student.nis.includes(search) ||
+      (student.nis || '').includes(search) ||
       student.nisn.includes(search);
     const matchClass = filterClass === 'all' || student.classId?.toString() === filterClass;
     return matchSearch && matchClass && student.status === 'active';
@@ -185,7 +185,7 @@ export function StudentList() {
     // Create template with sample data
     const templateData = [
       {
-        'NIS': '2024001',
+        'NIS': '',
         'NISN': '0012345678',
         'Nama Lengkap': 'Contoh Nama Siswa',
         'Kelas': '7A',
@@ -220,7 +220,7 @@ export function StudentList() {
       ['PANDUAN IMPORT DATA SISWA'],
       [''],
       ['Format Data:'],
-      ['1. NIS: Nomor Induk Siswa (contoh: 2024001)'],
+      ['1. NIS: Nomor Induk Siswa (opsional, contoh: 2024001)'],
       ['2. NISN: Nomor Induk Siswa Nasional (contoh: 0012345678)'],
       ['3. Nama Lengkap: Nama lengkap siswa'],
       ['4. Kelas: Nama kelas (contoh: 7A, 8B, 9C)'],
@@ -234,7 +234,7 @@ export function StudentList() {
       ['Catatan:'],
       ['- Hapus baris contoh sebelum mengisi data siswa'],
       ['- Pastikan kelas sudah dibuat terlebih dahulu di menu Manajemen Kelas'],
-      ['- NIS dan NISN harus unik (tidak boleh duplikat)'],
+      ['- NIS bersifat opsional, NISN harus unik (tidak boleh duplikat)'],
       ['- Semua kolom wajib diisi'],
     ];
 
@@ -280,7 +280,7 @@ export function StudentList() {
           try {
             // Validate required fields
             const requiredFields = [
-              'NIS', 'NISN', 'Nama Lengkap', 'Kelas', 
+              'NISN', 'Nama Lengkap', 'Kelas', 
               'Jenis Kelamin', 'Tempat Lahir', 'Tanggal Lahir',
               'Nama Orang Tua/Wali', 'No. HP Orang Tua', 'Alamat'
             ];
@@ -307,7 +307,7 @@ export function StudentList() {
 
             // Create student object
             const newStudent = {
-              nis: row['NIS'].toString(),
+              nis: row['NIS'] ? row['NIS'].toString() : '',
               nisn: row['NISN'].toString(),
               name: row['Nama Lengkap'].toString(),
               classId: classInfo.id,
@@ -465,7 +465,8 @@ export function StudentList() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[100px]">NIS</TableHead>
+                    <TableHead className="w-[100px]">NISN</TableHead>
+                    <TableHead className="hidden sm:table-cell">NIS</TableHead>
                     <TableHead>Nama</TableHead>
                     <TableHead>Kelas</TableHead>
                     <TableHead className="hidden md:table-cell">Jenis Kelamin</TableHead>
@@ -477,14 +478,15 @@ export function StudentList() {
                 <TableBody>
                   {paginatedStudents.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         Tidak ada data siswa
                       </TableCell>
                     </TableRow>
                   ) : (
                     paginatedStudents.map((student) => (
                       <TableRow key={student.id}>
-                        <TableCell className="font-mono text-sm">{student.nis}</TableCell>
+                        <TableCell className="font-mono text-sm">{student.nisn}</TableCell>
+                        <TableCell className="hidden sm:table-cell font-mono text-sm">{student.nis || '-'}</TableCell>
                         <TableCell className="font-medium">{student.name}</TableCell>
                         <TableCell>
                           <Badge variant="secondary">{student.className}</Badge>

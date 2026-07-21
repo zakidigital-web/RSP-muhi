@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 // Updated type to match database schema (integer id)
 interface Student {
   id: number;
-  nis: string;
+  nis?: string | null;
   nisn: string;
   name: string;
   gender: 'L' | 'P';

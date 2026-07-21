@@ -168,7 +168,7 @@ export function initializeSeedData(): void {
         id: generateId(),
         studentId: student.id,
         studentName: student.name,
-        studentNis: student.nis,
+        studentNis: student.nis || '',
         className: student.className,
         paymentTypeId: sppType.id,
         paymentTypeName: sppType.name,

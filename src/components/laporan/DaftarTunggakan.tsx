@@ -36,7 +36,7 @@ const monthValues = [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6];
 interface TunggakanItem {
   studentId: number;
   studentName: string;
-  studentNis: string;
+  studentNis: string | null | undefined;
   className: string;
   parentPhone: string;
   unpaidMonths: number[];
@@ -114,7 +114,7 @@ export function DaftarTunggakan() {
     return tunggakanList.filter(item => {
       const matchSearch = 
         item.studentName.toLowerCase().includes(search.toLowerCase()) ||
-        item.studentNis.includes(search);
+        (item.studentNis || '').includes(search);
       
       const student = students.find(s => s.id === item.studentId);
       const matchClass = filterClass === 'all' || student?.classId?.toString() === filterClass;

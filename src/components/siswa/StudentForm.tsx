@@ -18,7 +18,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 // Updated types to match database schema
 interface Student {
   id: number;
-  nis: string;
+  nis?: string | null;
   nisn: string;
   name: string;
   gender: 'L' | 'P';
@@ -68,7 +68,7 @@ export function StudentForm({ student, onClose }: StudentFormProps) {
     
     if (student) {
       setFormData({
-        nis: student.nis,
+        nis: student.nis || '',
         nisn: student.nisn,
         name: student.name,
         gender: student.gender,
@@ -100,7 +100,6 @@ export function StudentForm({ student, onClose }: StudentFormProps) {
   const validate = () => {
     const newErrors: Record<string, string> = {};
     
-    if (!formData.nis) newErrors.nis = 'NIS wajib diisi';
     if (!formData.nisn) newErrors.nisn = 'NISN wajib diisi';
     if (!formData.name) newErrors.name = 'Nama wajib diisi';
     if (!formData.classId) newErrors.classId = 'Kelas wajib dipilih';
@@ -194,7 +193,7 @@ export function StudentForm({ student, onClose }: StudentFormProps) {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="nis">NIS *</Label>
+          <Label htmlFor="nis">NIS</Label>
           <Input
             id="nis"
             value={formData.nis}

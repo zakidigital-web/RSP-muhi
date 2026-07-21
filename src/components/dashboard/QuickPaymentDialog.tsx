@@ -69,7 +69,7 @@ export function QuickPaymentDialog({ open, onOpenChange }: QuickPaymentDialogPro
     const searchLower = search.toLowerCase();
     return (
       student.name.toLowerCase().includes(searchLower) ||
-      student.nis.toString().includes(search) ||
+      (student.nis || '').includes(search) ||
       student.nisn.toString().includes(search)
     );
   });
@@ -169,7 +169,7 @@ export function QuickPaymentDialog({ open, onOpenChange }: QuickPaymentDialogPro
         const paymentData = {
           studentId: selectedStudent.id,
           studentName: selectedStudent.name,
-          studentNis: selectedStudent.nis.toString(),
+          studentNis: selectedStudent.nis || '',
           className: selectedStudent.className,
           paymentTypeId: parseInt(formData.paymentTypeId),
           paymentTypeName: selectedPaymentType?.name || '',

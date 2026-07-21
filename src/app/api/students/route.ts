@@ -61,12 +61,13 @@ export async function GET(request: NextRequest) {
       conditions.push(eq(students.classId, parseInt(classId)));
     }
 
-    // Search by name or nis
+    // Search by name, nis, or nisn
     if (search) {
       conditions.push(
         or(
           like(students.name, `%${search}%`),
-          like(students.nis, `%${search}%`)
+          like(students.nis, `%${search}%`),
+          like(students.nisn, `%${search}%`)
         )
       );
     }
@@ -96,7 +97,6 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     const requiredFields = [
-      'nis',
       'nisn',
       'name',
       'gender',
@@ -142,21 +142,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for unique nis
-    const existingNis = await getDb()
-      .select()
-      .from(students)
-      .where(eq(students.nis, body.nis.trim()))
-      .limit(1);
+    // Check for unique nis (only if provided)
+    if (body.nis && body.nis.trim() !== '') {
+      const existingNis = await getDb()
+        .select()
+        .from(students)
+        .where(eq(students.nis, body.nis.trim()))
+        .limit(1);
 
-    if (existingNis.length > 0) {
-      return NextResponse.json(
-        {
-          error: 'NIS already exists',
-          code: 'DUPLICATE_NIS',
-        },
-        { status: 400 }
-      );
+      if (existingNis.length > 0) {
+        return NextResponse.json(
+          {
+            error: 'NIS already exists',
+            code: 'DUPLICATE_NIS',
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // Check for unique nisn
@@ -181,7 +183,7 @@ export async function POST(request: NextRequest) {
     const newStudent = await getDb()
       .insert(students)
       .values({
-        nis: body.nis.trim(),
+        nis: body.nis ? body.nis.trim() : null,
         nisn: body.nisn.trim(),
         name: body.name.trim(),
         gender: body.gender,

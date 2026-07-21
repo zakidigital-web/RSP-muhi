@@ -22,7 +22,7 @@ export const classes = sqliteTable('classes', {
 // Students table
 export const students = sqliteTable('students', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  nis: text('nis').notNull().unique(),
+  nis: text('nis').unique(),
   nisn: text('nisn').notNull().unique(),
   name: text('name').notNull(),
   gender: text('gender').notNull(),
@@ -58,7 +58,7 @@ export const payments = sqliteTable('payments', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   studentId: integer('student_id').references(() => students.id).notNull(),
   studentName: text('student_name').notNull(),
-  studentNis: text('student_nis').notNull(),
+  studentNis: text('student_nis'),
   className: text('class_name').notNull(),
   paymentTypeId: integer('payment_type_id').references(() => paymentTypes.id).notNull(),
   paymentTypeName: text('payment_type_name').notNull(),

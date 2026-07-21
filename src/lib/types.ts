@@ -2,8 +2,8 @@
 
 export interface Student {
   id: number;
-  nis: string; // Nomor Induk Siswa
-  nisn: string; // Nomor Induk Siswa Nasional
+  nis?: string | null; // Nomor Induk Siswa (opsional)
+  nisn: string; // Nomor Induk Siswa Nasional (wajib)
   name: string;
   gender: 'L' | 'P';
   classId: number | null;
@@ -44,7 +44,7 @@ export interface Payment {
   id: number;
   studentId: number;
   studentName: string;
-  studentNis: string;
+  studentNis?: string | null;
   className: string;
   paymentTypeId: number;
   paymentTypeName: string;
@@ -109,7 +109,7 @@ export interface MonthlyPaymentSummary {
 export interface StudentPaymentStatus {
   studentId: number;
   studentName: string;
-  studentNis: string;
+  studentNis?: string | null;
   className: string;
   paidMonths: number[];
   unpaidMonths: number[];

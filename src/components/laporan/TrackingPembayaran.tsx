@@ -37,7 +37,7 @@ const monthValues = [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6];
 interface StudentPaymentStatus {
   studentId: number;
   studentName: string;
-  studentNis: string;
+  studentNis: string | null | undefined;
   className: string;
   paidMonths?: number[];
   unpaidMonths?: number[];
@@ -139,7 +139,7 @@ export function TrackingPembayaran() {
     return paymentStatuses.filter(status => {
       const matchSearch = 
         status.studentName.toLowerCase().includes(search.toLowerCase()) ||
-        status.studentNis.includes(search);
+        (status.studentNis || '').includes(search);
       
       const student = students.find(s => s.id === status.studentId);
       const matchClass = filterClass === 'all' || student?.classId?.toString() === filterClass;
