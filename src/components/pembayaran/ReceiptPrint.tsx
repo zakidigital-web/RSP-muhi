@@ -455,6 +455,13 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     const metode =
       p.paymentMethod === 'cash' ? 'Tunai' : p.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya';
     lines.push(...text('Metode    : ' + metode + '\r\n'));
+    if (p.notes) {
+      const noteLines = wrapText(p.notes, 32);
+      lines.push(...text('Catatan    :\r\n'));
+      for (const nl of noteLines) {
+        lines.push(...text('  ' + nl + '\r\n'));
+      }
+    }
 
     lines.push(...sepThin());
     lines.push(...setAlign(1));
@@ -592,6 +599,12 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
           <span>Metode</span>
           <span>${payment.paymentMethod === 'cash' ? 'Tunai' : payment.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya'}</span>
         </div>
+        ${payment.notes ? `
+        <div style="margin: 4px 0;">
+          <div style="font-size: 10px; color: #666;">Catatan:</div>
+          <div>${payment.notes}</div>
+        </div>
+        ` : ''}
         
         <div class="thick-line"></div>
         
@@ -738,6 +751,12 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
                payment.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya'}
             </span>
           </div>
+          {payment.notes && (
+            <div className="flex flex-col gap-1">
+              <span className="text-muted-foreground">Catatan:</span>
+              <span className="text-sm">{payment.notes}</span>
+            </div>
+          )}
         </div>
 
         <div className="border-t pt-4">
