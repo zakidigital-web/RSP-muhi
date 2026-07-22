@@ -1,29 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-
-interface Payment {
-  id: number;
-  receiptNumber: string;
-  studentId: number;
-  studentName: string;
-  studentNis: string;
-  className: string;
-  paymentTypeId: number;
-  paymentTypeName: string;
-  amount: number;
-  paymentDate: string;
-  month: number | null;
-  year: number;
-  academicYearId: number;
-  isInstallment: boolean;
-  installmentNumber?: number;
-  totalInstallments?: number;
-  remainingAmount?: number;
-  isPaidOff: boolean;
-  notes?: string;
-  createdAt: string;
-}
+import { Payment } from '@/lib/types';
 
 export function usePayments() {
   const [payments, setPaymentsState] = useState<Payment[]>([]);

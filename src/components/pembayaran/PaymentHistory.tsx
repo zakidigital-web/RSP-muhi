@@ -44,7 +44,10 @@ import {
   ChevronRight,
   Trash2,
   Undo2,
+  Columns3,
 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ReceiptPrint } from './ReceiptPrint';
 import { toast } from 'sonner';
 import { usePayments } from '@/hooks/usePayments';
@@ -67,13 +70,41 @@ export function PaymentHistory() {
   const [paymentToDelete, setPaymentToDelete] = useState<typeof payments[0] | null>(null);
   const [showUndoButton, setShowUndoButton] = useState(false);
 
+  const [columns, setColumns] = useState({
+    receiptNumber: true,
+    date: true,
+    student: true,
+    className: true,
+    paymentType: true,
+    month: true,
+    method: true,
+    notes: true,
+    status: true,
+    amount: true,
+  });
+
+  const columnLabels: Record<string, string> = {
+    receiptNumber: 'No. Kuitansi',
+    date: 'Tanggal',
+    student: 'Siswa',
+    className: 'Kelas',
+    paymentType: 'Jenis Bayar',
+    month: 'Bulan',
+    method: 'Metode',
+    notes: 'Catatan',
+    status: 'Status',
+    amount: 'Jumlah',
+  };
+
   const itemsPerPage = 15;
 
   const filteredPayments = payments.filter(payment => {
     const matchSearch = 
       payment.studentName.toLowerCase().includes(search.toLowerCase()) ||
-      payment.studentNis.toString().includes(search) ||
-      payment.receiptNumber.toLowerCase().includes(search.toLowerCase());
+      (payment.studentNis || '').includes(search) ||
+      payment.receiptNumber.toLowerCase().includes(search.toLowerCase()) ||
+      (payment.paymentMethod || '').toLowerCase().includes(search.toLowerCase()) ||
+      (payment.notes || '').toLowerCase().includes(search.toLowerCase());
     const matchType = filterType === 'all' || payment.paymentTypeId.toString() === filterType;
     const matchMonth = filterMonth === 'all' || 
       (payment.month && payment.month.toString() === filterMonth);
@@ -177,7 +208,7 @@ export function PaymentHistory() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Cari nama, NIS, no. kuitansi..."
+                  placeholder="Cari nama, NIS, no. kuitansi, metode, catatan..."
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
@@ -186,6 +217,35 @@ export function PaymentHistory() {
                   className="pl-9 w-full sm:w-[250px]"
                 />
               </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Columns3 className="h-4 w-4" />
+                    Kolom
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-56">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Tampilkan Kolom</p>
+                    <div className="space-y-1.5">
+                      {(Object.keys(columns) as Array<keyof typeof columns>).map((key) => (
+                        <label
+                          key={key}
+                          className="flex items-center gap-2 text-sm cursor-pointer"
+                        >
+                          <Checkbox
+                            checked={columns[key]}
+                            onCheckedChange={(checked) =>
+                              setColumns((prev) => ({ ...prev, [key]: !!checked }))
+                            }
+                          />
+                          {columnLabels[key]}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
               <Select 
                 value={filterType} 
                 onValueChange={(value) => {
@@ -242,71 +302,104 @@ export function PaymentHistory() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>No. Kuitansi</TableHead>
-                      <TableHead>Tanggal</TableHead>
-                      <TableHead>Siswa</TableHead>
-                      <TableHead>Kelas</TableHead>
-                      <TableHead>Jenis</TableHead>
-                      <TableHead>Bulan</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Jumlah</TableHead>
+                      {columns.receiptNumber && <TableHead>No. Kuitansi</TableHead>}
+                      {columns.date && <TableHead>Tanggal</TableHead>}
+                      {columns.student && <TableHead>Siswa</TableHead>}
+                      {columns.className && <TableHead>Kelas</TableHead>}
+                      {columns.paymentType && <TableHead>Jenis</TableHead>}
+                      {columns.month && <TableHead>Bulan</TableHead>}
+                      {columns.method && <TableHead>Metode</TableHead>}
+                      {columns.notes && <TableHead>Catatan</TableHead>}
+                      {columns.status && <TableHead>Status</TableHead>}
+                      {columns.amount && <TableHead className="text-right">Jumlah</TableHead>}
                       <TableHead className="text-right">Aksi</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {paginatedPayments.map((payment) => (
                       <TableRow key={payment.id}>
-                        <TableCell className="font-mono text-xs">
-                          {payment.receiptNumber}
-                        </TableCell>
-                        <TableCell>
-                          {new Date(payment.paymentDate).toLocaleDateString('id-ID')}
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{payment.studentName}</p>
-                            <p className="text-xs text-muted-foreground">{payment.studentNis}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{payment.className}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="text-sm">{payment.paymentTypeName}</p>
-                            {payment.isInstallment && (
-                              <p className="text-xs text-muted-foreground">
-                                Cicilan {payment.installmentNumber}/{payment.totalInstallments}
-                              </p>
+                        {columns.receiptNumber && (
+                          <TableCell className="font-mono text-xs">
+                            {payment.receiptNumber}
+                          </TableCell>
+                        )}
+                        {columns.date && (
+                          <TableCell>
+                            {new Date(payment.paymentDate).toLocaleDateString('id-ID')}
+                          </TableCell>
+                        )}
+                        {columns.student && (
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{payment.studentName}</p>
+                              <p className="text-xs text-muted-foreground">{payment.studentNis}</p>
+                            </div>
+                          </TableCell>
+                        )}
+                        {columns.className && (
+                          <TableCell>
+                            <Badge variant="secondary">{payment.className}</Badge>
+                          </TableCell>
+                        )}
+                        {columns.paymentType && (
+                          <TableCell>
+                            <div>
+                              <p className="text-sm">{payment.paymentTypeName}</p>
+                              {payment.isInstallment && (
+                                <p className="text-xs text-muted-foreground">
+                                  Cicilan {payment.installmentNumber}/{payment.totalInstallments}
+                                </p>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
+                        {columns.month && (
+                          <TableCell>
+                            {payment.month ? monthNames[payment.month - 1] : '-'}
+                          </TableCell>
+                        )}
+                        {columns.method && (
+                          <TableCell>
+                            <span className="text-sm">
+                              {payment.paymentMethod === 'cash' ? 'Tunai' :
+                               payment.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya'}
+                            </span>
+                          </TableCell>
+                        )}
+                        {columns.notes && (
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground max-w-[120px] truncate block" title={payment.notes || ''}>
+                              {payment.notes || '-'}
+                            </span>
+                          </TableCell>
+                        )}
+                        {columns.status && (
+                          <TableCell>
+                            {payment.isPaidOff ? (
+                              <Badge className="bg-green-500">LUNAS</Badge>
+                            ) : payment.isInstallment ? (
+                              <Badge variant="outline" className="border-blue-500 text-blue-500">
+                                Cicilan
+                              </Badge>
+                            ) : (
+                              <Badge variant="default">Lunas</Badge>
                             )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {payment.month ? monthNames[payment.month - 1] : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {payment.isPaidOff ? (
-                            <Badge className="bg-green-500">LUNAS</Badge>
-                          ) : payment.isInstallment ? (
-                            <Badge variant="outline" className="border-blue-500 text-blue-500">
-                              Cicilan
-                            </Badge>
-                          ) : (
-                            <Badge variant="default">Lunas</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div>
-                            <p className="font-medium text-green-600">
-                              {formatCurrency(payment.amount)}
-                            </p>
-                            {payment.isInstallment && payment.remainingAmount && payment.remainingAmount > 0 && (
-                              <p className="text-xs text-muted-foreground">
-                                Sisa: {formatCurrency(payment.remainingAmount)}
+                          </TableCell>
+                        )}
+                        {columns.amount && (
+                          <TableCell className="text-right">
+                            <div>
+                              <p className="font-medium text-green-600">
+                                {formatCurrency(payment.amount)}
                               </p>
-                            )}
-                          </div>
-                        </TableCell>
+                              {payment.isInstallment && payment.remainingAmount && payment.remainingAmount > 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                  Sisa: {formatCurrency(payment.remainingAmount)}
+                                </p>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button
