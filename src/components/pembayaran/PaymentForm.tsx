@@ -37,7 +37,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function PaymentForm() {
   const { students, isLoading: studentsLoading, getActiveStudents } = useStudents();
-  const { payments, addPayment: savePayment } = usePayments();
+  const { payments } = usePayments();
   const { paymentTypes, isLoading: typesLoading } = usePaymentTypes();
   const { activeYear } = useAcademicYears();
   const { schoolInfo } = useSchoolInfo();
@@ -51,7 +51,7 @@ export function PaymentForm() {
 
   const [formData, setFormData] = useState({
     paymentTypeId: '',
-    month: '',
+    months: [] as number[],
     amount: 0,
     paymentMethod: 'cash' as 'cash' | 'transfer' | 'other',
     notes: '',
@@ -80,7 +80,7 @@ export function PaymentForm() {
     setSelectedStudent(student);
     setSearch('');
     setShowSearchResults(false);
-    setFormData(prev => ({ ...prev, month: '' }));
+    setFormData(prev => ({ ...prev, months: [], amount: 0 }));
   };
 
   const handlePaymentTypeChange = (typeId: string) => {
@@ -90,7 +90,7 @@ export function PaymentForm() {
       paymentTypeId: typeId,
       amount: type?.amount || 0,
       originalAmount: type?.amount || 0,
-      month: type?.isRecurring ? formData.month : '',
+      months: type?.isRecurring ? formData.months : [],
     });
   };
 
@@ -135,6 +135,37 @@ export function PaymentForm() {
     ? hasNonRecurringPaid(selectedStudent.id, selectedPaymentType.id)
     : false;
 
+  const toggleMonth = (month: number) => {
+    setFormData(prev => {
+      const isSelected = prev.months.includes(month);
+      const months = isSelected
+        ? prev.months.filter(m => m !== month)
+        : [...prev.months, month].sort((a, b) => a - b);
+      const type = paymentTypes.find(t => t.id.toString() === prev.paymentTypeId);
+      const amount = type?.isRecurring ? months.length * (type.amount || 0) : prev.amount;
+      return { ...prev, months, amount };
+    });
+  };
+
+  const selectAllMonths = () => {
+    const available = academicMonths
+      .map(m => m.month)
+      .filter(m => !paidMonths.includes(m));
+    setFormData(prev => {
+      const type = paymentTypes.find(t => t.id.toString() === prev.paymentTypeId);
+      const amount = type?.isRecurring ? available.length * (type.amount || 0) : prev.amount;
+      return { ...prev, months: available, amount };
+    });
+  };
+
+  const clearMonths = () => {
+    setFormData(prev => ({
+      ...prev,
+      months: [],
+      amount: selectedPaymentType?.isRecurring ? 0 : prev.amount,
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -148,23 +179,25 @@ export function PaymentForm() {
       return;
     }
 
-    if (selectedPaymentType?.isRecurring && !formData.month) {
-      toast.error('Pilih bulan pembayaran');
+    if (selectedPaymentType?.isRecurring && formData.months.length === 0) {
+      toast.error('Pilih minimal satu bulan pembayaran');
       return;
+    }
+
+    if (selectedPaymentType?.isRecurring && formData.months.length > 0) {
+      const alreadyPaid = formData.months.filter(m => paidMonths.includes(m));
+      if (alreadyPaid.length > 0) {
+        const names = alreadyPaid.map(m =>
+          academicMonths.find(am => am.month === m)?.name || monthNames[m - 1]
+        );
+        toast.error(`❌ Bulan ${names.join(', ')} sudah LUNAS!`);
+        return;
+      }
     }
 
     if (formData.amount <= 0) {
       toast.error('Jumlah pembayaran harus lebih dari 0');
       return;
-    }
-
-    if (selectedPaymentType?.isRecurring && formData.month) {
-      const monthNum = parseInt(formData.month);
-      if (paidMonths.includes(monthNum)) {
-        const monthName = academicMonths.find(m => m.month === monthNum)?.name || monthNames[monthNum - 1];
-        toast.error(`❌ Pembayaran bulan ${monthName} sudah LUNAS!`);
-        return;
-      }
     }
 
     if (!selectedPaymentType?.isRecurring && isNonRecurringPaid && !formData.isInstallment) {
@@ -186,56 +219,80 @@ export function PaymentForm() {
 
     try {
       const now = new Date();
-      const selectedMonthData = academicMonths.find(m => m.month === parseInt(formData.month));
-      const paymentYear = selectedPaymentType?.isRecurring && selectedMonthData 
-        ? selectedMonthData.year 
-        : now.getFullYear();
+      const paymentDate = now.toISOString().split('T')[0];
+      const isMultiMonth = !!selectedPaymentType?.isRecurring;
+      const unitAmount = selectedPaymentType?.amount || 0;
 
-      const paymentData = {
-        studentId: selectedStudent.id,
-        studentName: selectedStudent.name,
-        studentNis: selectedStudent.nis || '',
-        className: selectedStudent.className,
-        paymentTypeId: parseInt(formData.paymentTypeId),
-        paymentTypeName: selectedPaymentType?.name || '',
-        amount: formData.amount,
-        month: selectedPaymentType?.isRecurring ? parseInt(formData.month) : null,
-        year: paymentYear,
-        academicYearId: activeYear.id,
-        paymentDate: now.toISOString().split('T')[0],
-        paymentMethod: formData.paymentMethod,
-        notes: formData.notes,
-        isInstallment: formData.isInstallment,
-        installmentNumber: formData.isInstallment ? formData.installmentNumber : null,
-        totalInstallments: formData.isInstallment ? formData.totalInstallments : null,
-        isPaidOff: formData.isPaidOff || !formData.isInstallment,
-        originalAmount: formData.isInstallment ? formData.originalAmount : null,
-        remainingAmount: formData.isInstallment && !formData.isPaidOff 
-          ? formData.originalAmount - formData.amount 
-          : null,
-      };
+      const monthsToProcess = isMultiMonth ? formData.months : [null];
 
-      // @ts-ignore - IDs are numbers now
-      await savePayment(paymentData);
-      
-      const latestResponse = await fetch('/api/payments?limit=1&studentId=' + selectedStudent.id);
-      const latestData = await latestResponse.json();
-      if (latestData && latestData.length > 0) {
-        setLastPayment(latestData[0]);
+      const createdPayments: Payment[] = [];
+
+      for (const month of monthsToProcess) {
+        const selectedMonthData = month !== null
+          ? academicMonths.find(m => m.month === month)
+          : undefined;
+
+        const paymentYear = isMultiMonth && selectedMonthData
+          ? selectedMonthData.year
+          : now.getFullYear();
+
+        const paymentData = {
+          studentId: selectedStudent.id,
+          studentName: selectedStudent.name,
+          studentNis: selectedStudent.nis || '',
+          className: selectedStudent.className,
+          paymentTypeId: parseInt(formData.paymentTypeId),
+          paymentTypeName: selectedPaymentType?.name || '',
+          amount: isMultiMonth ? unitAmount : formData.amount,
+          month: isMultiMonth ? month : null,
+          year: paymentYear,
+          academicYearId: activeYear.id,
+          paymentDate,
+          paymentMethod: formData.paymentMethod,
+          notes: formData.notes,
+          isInstallment: isMultiMonth ? false : formData.isInstallment,
+          installmentNumber: isMultiMonth ? null : (formData.isInstallment ? formData.installmentNumber : null),
+          totalInstallments: isMultiMonth ? null : (formData.isInstallment ? formData.totalInstallments : null),
+          isPaidOff: isMultiMonth ? true : (formData.isPaidOff || !formData.isInstallment),
+          originalAmount: isMultiMonth ? null : (formData.isInstallment ? formData.originalAmount : null),
+          remainingAmount: isMultiMonth ? null : (formData.isInstallment && !formData.isPaidOff
+            ? formData.originalAmount - formData.amount
+            : null),
+        };
+
+        const response = await fetch('/api/payments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(paymentData),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Gagal menyimpan pembayaran');
+        }
+
+        const created = await response.json();
+        createdPayments.push(created);
+      }
+
+      if (createdPayments.length > 0) {
+        setLastPayment(createdPayments[createdPayments.length - 1]);
         setShowReceipt(true);
       }
-      
-      const message = formData.isPaidOff 
-        ? '✅ Pembayaran berhasil dicatat dan ditandai LUNAS!' 
-        : formData.isInstallment 
-          ? `✅ Cicilan ke-${formData.installmentNumber} berhasil dicatat!`
-          : '✅ Pembayaran berhasil dicatat!';
-      
+
+      const message = isMultiMonth && createdPayments.length > 1
+        ? `✅ Pembayaran ${createdPayments.length} bulan berhasil dicatat!`
+        : formData.isPaidOff
+          ? '✅ Pembayaran berhasil dicatat dan ditandai LUNAS!'
+          : formData.isInstallment
+            ? `✅ Cicilan ke-${formData.installmentNumber} berhasil dicatat!`
+            : '✅ Pembayaran berhasil dicatat!';
+
       toast.success(message);
 
       setFormData({
         paymentTypeId: '',
-        month: '',
+        months: [],
         amount: 0,
         paymentMethod: 'cash',
         notes: '',
@@ -247,7 +304,8 @@ export function PaymentForm() {
       });
       setSelectedStudent(null);
     } catch (error) {
-      toast.error('Gagal menyimpan pembayaran');
+      const msg = error instanceof Error ? error.message : 'Gagal menyimpan pembayaran';
+      toast.error(msg);
       console.error(error);
     } finally {
       setIsSubmitting(false);
@@ -372,53 +430,43 @@ export function PaymentForm() {
 
               {selectedPaymentType?.isRecurring && (
                 <div className="space-y-2">
-                  <Label>Bulan Pembayaran *</Label>
-                    <Select
-                      value={formData.month}
-                      onValueChange={(value) => setFormData({ ...formData, month: value })}
-                      disabled={isSubmitting}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih bulan" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {academicMonths.map((m) => {
-                          const isPaid = paidMonths.includes(m.month);
-                          return (
-                            <SelectItem 
-                              key={`${m.month}-${m.year}`} 
-                              value={m.month.toString()}
-                              disabled={isPaid}
-                            >
-                              <span className="flex items-center gap-2">
-                                {m.name} {m.year}
-                                {isPaid && (
-                                  <Badge variant="default" className="bg-green-500 text-xs">
-                                    LUNAS
-                                  </Badge>
-                                )}
-                              </span>
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                    {selectedStudent && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {academicMonths.map((m) => {
-                          const isPaid = paidMonths.includes(m.month);
-                          return (
-                            <Badge 
-                              key={`${m.month}-${m.year}`}
-                              variant={isPaid ? "default" : "outline"}
-                              className={`text-xs ${isPaid ? 'bg-green-500 hover:bg-green-600' : ''}`}
-                            >
-                              {m.name.slice(0, 3)}
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    )}
+                  <div className="flex items-center justify-between">
+                    <Label>Bulan Pembayaran *</Label>
+                    <div className="flex gap-1">
+                      <Button type="button" variant="outline" size="sm" onClick={selectAllMonths} disabled={isSubmitting}>
+                        Semua
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={clearMonths} disabled={isSubmitting}>
+                        Bersihkan
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                    {academicMonths.map((m) => {
+                      const isPaid = paidMonths.includes(m.month);
+                      const isSelected = formData.months.includes(m.month);
+                      return (
+                        <Button
+                          key={`${m.month}-${m.year}`}
+                          type="button"
+                          size="sm"
+                          variant={isSelected ? 'default' : isPaid ? 'secondary' : 'outline'}
+                          onClick={() => toggleMonth(m.month)}
+                          disabled={isPaid || isSubmitting}
+                          className={isPaid ? 'opacity-60' : ''}
+                          title={isPaid ? `${m.name} ${m.year} (Sudah lunas)` : `${m.name} ${m.year}`}
+                        >
+                          {m.name.slice(0, 3)}
+                          {isPaid && ' ✓'}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {formData.months.length > 0
+                      ? `${formData.months.length} bulan dipilih • Total ${formatCurrency(formData.amount)}`
+                      : 'Klik bulan untuk memilih (bisa lebih dari satu)'}
+                  </p>
                 </div>
               )}
 
@@ -472,17 +520,20 @@ export function PaymentForm() {
               )}
 
               <div className="space-y-2">
-                <Label>Jumlah Bayar *</Label>
+                <Label>Jumlah Bayar {selectedPaymentType?.isRecurring ? '(Otomatis)' : '*'}</Label>
                 <Input
                   type="number"
                   value={formData.amount || ''}
                   onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) || 0 })}
                   min="0"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !!selectedPaymentType?.isRecurring}
                 />
                 {formData.amount > 0 && (
                   <p className="text-xs text-muted-foreground">
                     {formatCurrency(formData.amount)}
+                    {selectedPaymentType?.isRecurring && formData.months.length > 0 && (
+                      <> ({formData.months.length} bulan × {formatCurrency(selectedPaymentType.amount)})</>
+                    )}
                   </p>
                 )}
               </div>
@@ -595,12 +646,14 @@ export function PaymentForm() {
                     <span className="text-muted-foreground">Jenis Pembayaran:</span>
                     <span>{selectedPaymentType?.name}</span>
                   </div>
-                    {selectedPaymentType?.isRecurring && formData.month && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Bulan:</span>
-                        <span>
-                          {academicMonths.find(m => m.month === parseInt(formData.month))?.name}{' '}
-                          {academicMonths.find(m => m.month === parseInt(formData.month))?.year}
+                    {selectedPaymentType?.isRecurring && formData.months.length > 0 && (
+                      <div className="flex justify-between gap-4">
+                        <span className="text-muted-foreground shrink-0">Bulan:</span>
+                        <span className="text-right font-medium">
+                          {formData.months.map(m => {
+                            const am = academicMonths.find(x => x.month === m);
+                            return `${am?.name || monthNames[m - 1]} ${am?.year || ''}`;
+                          }).join(', ')}
                         </span>
                       </div>
                     )}
