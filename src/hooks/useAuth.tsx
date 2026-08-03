@@ -100,3 +100,16 @@ export const useAuth = () => {
   }
   return context;
 };
+
+export function getCurrentAdminName(): string {
+  try {
+    const stored = localStorage.getItem('spp_admin_info');
+    if (stored) {
+      const info = JSON.parse(stored);
+      if (info && info.name && info.name.trim()) {
+        return info.name.trim();
+      }
+    }
+  } catch {}
+  return 'admin';
+}

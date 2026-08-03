@@ -28,7 +28,7 @@ import { useStudents } from '@/hooks/useStudents';
 import { usePayments } from '@/hooks/usePayments';
 import { usePaymentTypes } from '@/hooks/usePaymentTypes';
 import { useAcademicYears } from '@/hooks/useAcademicYears';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, getCurrentAdminName } from '@/hooks/useAuth';
 import { formatCurrency } from '@/lib/utils/currency';
 import { monthNames, getAcademicMonths } from '../../lib/utils/date';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -182,7 +182,7 @@ export function QuickPaymentDialog({ open, onOpenChange }: QuickPaymentDialogPro
           paymentDate: now.toISOString().split('T')[0],
           paymentMethod: formData.paymentMethod,
           notes: formData.notes,
-          createdBy: adminInfo?.name || 'admin',
+          createdBy: adminInfo?.name?.trim() || getCurrentAdminName(),
           isInstallment: formData.isInstallment,
           installmentNumber: formData.isInstallment ? formData.installmentNumber : null,
           totalInstallments: formData.isInstallment ? formData.totalInstallments : null,

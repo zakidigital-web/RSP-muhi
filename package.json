@@ -6,7 +6,9 @@
         "dev": "next dev --turbopack",
         "build": "next build",
         "start": "next start",
-        "lint": "next lint"
+        "lint": "next lint",
+        "migrate": "bun migrate.ts",
+        "seed": "bun seed.ts"
     },
     "dependencies": {
         "@babel/parser": "^7.28.5",

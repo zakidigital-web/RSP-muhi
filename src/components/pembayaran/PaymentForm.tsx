@@ -30,7 +30,7 @@ import { usePayments } from '@/hooks/usePayments';
 import { usePaymentTypes } from '@/hooks/usePaymentTypes';
 import { useAcademicYears } from '@/hooks/useAcademicYears';
 import { useSchoolInfo } from '@/hooks/useSchoolInfo';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, getCurrentAdminName } from '@/hooks/useAuth';
 import { formatCurrency } from '@/lib/utils/currency';
 import { monthNames, getAcademicMonths } from '../../lib/utils/date';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -308,7 +308,7 @@ export function PaymentForm() {
           paymentDate,
           paymentMethod: formData.paymentMethod,
           notes: formData.notes,
-          createdBy: adminInfo?.name || 'admin',
+          createdBy: adminInfo?.name?.trim() || getCurrentAdminName(),
           isInstallment: isInstallmentForType,
           installmentNumber: isInstallmentForType ? formData.installmentNumber : null,
           totalInstallments: isInstallmentForType ? formData.totalInstallments : null,

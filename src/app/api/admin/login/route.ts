@@ -4,6 +4,12 @@ import { adminUsers } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 export const runtime = 'nodejs';
 
+function getDisplayName(admin: { id: number; name: string }): string {
+  const name = (admin.name || '').trim();
+  if (name && name.toLowerCase() !== 'admin') return name;
+  return `Admin ${admin.id}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { password } = await request.json();
@@ -28,12 +34,12 @@ export async function POST(request: NextRequest) {
       const seeded = await db.select().from(adminUsers).where(eq(adminUsers.isActive, true));
       const matched = seeded.find((a) => a.password === password);
       if (matched) {
-        return NextResponse.json({ success: true, adminId: matched.id, adminName: matched.name });
+        return NextResponse.json({ success: true, adminId: matched.id, adminName: getDisplayName(matched) });
       }
     } else {
       const matched = allAdmins.find((a) => a.password === password);
       if (matched) {
-        return NextResponse.json({ success: true, adminId: matched.id, adminName: matched.name });
+        return NextResponse.json({ success: true, adminId: matched.id, adminName: getDisplayName(matched) });
       }
     }
 
