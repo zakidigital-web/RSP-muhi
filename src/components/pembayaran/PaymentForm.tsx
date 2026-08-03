@@ -477,6 +477,7 @@ export function PaymentForm() {
                         type="button"
                         onClick={() => toggleType(type.id)}
                         disabled={isSubmitting}
+                        aria-pressed={isSelected}
                         className={`flex items-center justify-between rounded-lg border p-3 text-left transition-colors ${
                           isSelected
                             ? 'border-primary bg-primary/5'
@@ -485,7 +486,13 @@ export function PaymentForm() {
                         title={isPaid ? `${type.name} sudah lunas` : type.name}
                       >
                         <div className="flex items-center gap-2">
-                          <Checkbox checked={isSelected} className="pointer-events-none" />
+                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border ${
+                            isSelected
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-input bg-background'
+                          }`}>
+                            {isSelected && <Check className="h-3 w-3" />}
+                          </span>
                           <span className="text-sm font-medium">{type.name}</span>
                           {isPaid && <span className="text-xs text-green-600">✓ Lunas</span>}
                         </div>
