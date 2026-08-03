@@ -1,25 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-
-// Updated type to match database schema (integer id)
-interface Student {
-  id: number;
-  nis?: string | null;
-  nisn: string;
-  name: string;
-  gender: 'L' | 'P';
-  classId: number | null;
-  className: string;
-  birthPlace: string;
-  birthDate: string;
-  address: string;
-  parentName: string;
-  parentPhone: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-}
+import { Student } from '@/lib/types';
 
 export function useStudents() {
   const [students, setStudentsState] = useState<Student[]>([]);

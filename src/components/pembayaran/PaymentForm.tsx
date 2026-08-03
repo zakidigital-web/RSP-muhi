@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Search, CreditCard, Check, Printer, AlertCircle } from 'lucide-react';
+import { Search, CreditCard, Check, Printer, AlertCircle, Layers } from 'lucide-react';
 import { Student, PaymentType, Payment } from '@/lib/types';
 import { toast } from 'sonner';
 import { ReceiptPrint } from './ReceiptPrint';
@@ -52,9 +52,9 @@ export function PaymentForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
-    paymentTypeId: '',
-    months: [] as number[],
-    amount: 0,
+    selectedTypeIds: [] as number[],
+    monthsByType: {} as Record<number, number[]>,
+    amountByType: {} as Record<number, number>,
     paymentMethod: 'cash' as 'cash' | 'transfer' | 'other',
     notes: '',
     isInstallment: false,
@@ -65,8 +65,11 @@ export function PaymentForm() {
   });
 
   const activeStudents = getActiveStudents();
-  
-  const selectedPaymentType = paymentTypes.find(t => t.id.toString() === formData.paymentTypeId);
+
+  const selectedPaymentTypes = paymentTypes.filter(t => formData.selectedTypeIds.includes(t.id));
+  const recurringTypes = selectedPaymentTypes.filter(t => t.isRecurring);
+  const nonRecurringTypes = selectedPaymentTypes.filter(t => !t.isRecurring);
+  const isSingleNonRecurring = nonRecurringTypes.length === 1 && recurringTypes.length === 0;
 
   const filteredStudents = activeStudents.filter(student => {
     if (!search) return false;
@@ -82,18 +85,13 @@ export function PaymentForm() {
     setSelectedStudent(student);
     setSearch('');
     setShowSearchResults(false);
-    setFormData(prev => ({ ...prev, months: [], amount: 0 }));
-  };
-
-  const handlePaymentTypeChange = (typeId: string) => {
-    const type = paymentTypes.find(t => t.id.toString() === typeId);
-    setFormData({
-      ...formData,
-      paymentTypeId: typeId,
-      amount: type?.amount || 0,
-      originalAmount: type?.amount || 0,
-      months: type?.isRecurring ? formData.months : [],
-    });
+    setFormData(prev => ({
+      ...prev,
+      monthsByType: {},
+      amountByType: {},
+      isInstallment: false,
+      isPaidOff: false,
+    }));
   };
 
   const getStudentPaidMonths = (studentId: number, paymentTypeId: number): number[] => {
@@ -109,18 +107,6 @@ export function PaymentForm() {
       .map(p => p.month!);
   };
 
-  const getAcademicMonthsList = () => {
-    if (!activeYear) return [];
-    return getAcademicMonths(activeYear.name, selectedPaymentType?.isRecurring ? {
-      fromMonth: selectedPaymentType.fromMonth,
-      fromYear: selectedPaymentType.fromYear,
-      toMonth: selectedPaymentType.toMonth,
-      toYear: selectedPaymentType.toYear
-    } : undefined);
-  };
-
-  const academicMonths = getAcademicMonthsList();
-
   const hasNonRecurringPaid = (studentId: number, paymentTypeId: number): boolean => {
     return payments.some(p => 
       p.studentId === studentId && 
@@ -129,43 +115,97 @@ export function PaymentForm() {
     );
   };
 
-  const paidMonths = selectedStudent && selectedPaymentType?.isRecurring 
-    ? getStudentPaidMonths(selectedStudent.id, selectedPaymentType.id)
-    : [];
+  const getAcademicMonthsForType = (type: PaymentType) => {
+    if (!activeYear) return [];
+    return getAcademicMonths(activeYear.name, type.isRecurring ? {
+      fromMonth: type.fromMonth,
+      fromYear: type.fromYear,
+      toMonth: type.toMonth,
+      toYear: type.toYear
+    } : undefined);
+  };
 
-  const isNonRecurringPaid = selectedStudent && selectedPaymentType && !selectedPaymentType.isRecurring
-    ? hasNonRecurringPaid(selectedStudent.id, selectedPaymentType.id)
-    : false;
+  const paidMonthsForType = (typeId: number): number[] => {
+    return selectedStudent ? getStudentPaidMonths(selectedStudent.id, typeId) : [];
+  };
 
-  const toggleMonth = (month: number) => {
+  const toggleType = (typeId: number) => {
     setFormData(prev => {
-      const isSelected = prev.months.includes(month);
-      const months = isSelected
-        ? prev.months.filter(m => m !== month)
-        : [...prev.months, month].sort((a, b) => a - b);
-      const type = paymentTypes.find(t => t.id.toString() === prev.paymentTypeId);
-      const amount = type?.isRecurring ? months.length * (type.amount || 0) : prev.amount;
-      return { ...prev, months, amount };
+      const isSelected = prev.selectedTypeIds.includes(typeId);
+      const selectedTypeIds = isSelected
+        ? prev.selectedTypeIds.filter(id => id !== typeId)
+        : [...prev.selectedTypeIds, typeId];
+      const monthsByType = { ...prev.monthsByType };
+      const amountByType = { ...prev.amountByType };
+      if (isSelected) {
+        delete monthsByType[typeId];
+        delete amountByType[typeId];
+      } else {
+        const type = paymentTypes.find(t => t.id === typeId);
+        if (type && !type.isRecurring) {
+          amountByType[typeId] = type.amount || 0;
+        }
+      }
+      return { ...prev, selectedTypeIds, monthsByType, amountByType };
     });
   };
 
-  const selectAllMonths = () => {
+  const toggleMonth = (typeId: number, month: number) => {
+    setFormData(prev => {
+      const current = prev.monthsByType[typeId] || [];
+      const isSelected = current.includes(month);
+      const months = isSelected
+        ? current.filter(m => m !== month)
+        : [...current, month].sort((a, b) => a - b);
+      return { ...prev, monthsByType: { ...prev.monthsByType, [typeId]: months } };
+    });
+  };
+
+  const selectAllMonths = (typeId: number) => {
+    const type = paymentTypes.find(t => t.id === typeId);
+    if (!type) return;
+    const academicMonths = getAcademicMonthsForType(type);
+    const paid = paidMonthsForType(typeId);
     const available = academicMonths
       .map(m => m.month)
-      .filter(m => !paidMonths.includes(m));
-    setFormData(prev => {
-      const type = paymentTypes.find(t => t.id.toString() === prev.paymentTypeId);
-      const amount = type?.isRecurring ? available.length * (type.amount || 0) : prev.amount;
-      return { ...prev, months: available, amount };
-    });
-  };
-
-  const clearMonths = () => {
+      .filter(m => !paid.includes(m));
     setFormData(prev => ({
       ...prev,
-      months: [],
-      amount: selectedPaymentType?.isRecurring ? 0 : prev.amount,
+      monthsByType: { ...prev.monthsByType, [typeId]: available },
     }));
+  };
+
+  const clearMonths = (typeId: number) => {
+    setFormData(prev => ({
+      ...prev,
+      monthsByType: { ...prev.monthsByType, [typeId]: [] },
+    }));
+  };
+
+  const handleAmountChange = (typeId: number, amount: number) => {
+    setFormData(prev => ({
+      ...prev,
+      amountByType: { ...prev.amountByType, [typeId]: amount },
+    }));
+  };
+
+  const getTypeAmount = (type: PaymentType): number => {
+    if (type.isRecurring) {
+      return (formData.monthsByType[type.id]?.length || 0) * (type.amount || 0);
+    }
+    return formData.amountByType[type.id] || 0;
+  };
+
+  const totalAmount = selectedPaymentTypes.reduce((sum, t) => sum + getTypeAmount(t), 0);
+
+  const getMonthsLabel = (type: PaymentType): string => {
+    const months = formData.monthsByType[type.id] || [];
+    const academicMonths = getAcademicMonthsForType(type);
+    if (months.length === 0) return '';
+    return months.map(m => {
+      const am = academicMonths.find(x => x.month === m);
+      return `${am?.name || monthNames[m - 1]} ${am?.year || ''}`;
+    }).join(', ');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -176,35 +216,38 @@ export function PaymentForm() {
       return;
     }
 
-    if (!formData.paymentTypeId) {
-      toast.error('Pilih jenis pembayaran');
+    if (selectedPaymentTypes.length === 0) {
+      toast.error('Pilih minimal satu jenis pembayaran');
       return;
     }
 
-    if (selectedPaymentType?.isRecurring && formData.months.length === 0) {
-      toast.error('Pilih minimal satu bulan pembayaran');
-      return;
-    }
-
-    if (selectedPaymentType?.isRecurring && formData.months.length > 0) {
-      const alreadyPaid = formData.months.filter(m => paidMonths.includes(m));
+    for (const type of recurringTypes) {
+      const months = formData.monthsByType[type.id] || [];
+      if (months.length === 0) {
+        toast.error(`Pilih minimal satu bulan untuk ${type.name}`);
+        return;
+      }
+      const paid = paidMonthsForType(type.id);
+      const alreadyPaid = months.filter(m => paid.includes(m));
       if (alreadyPaid.length > 0) {
         const names = alreadyPaid.map(m =>
-          academicMonths.find(am => am.month === m)?.name || monthNames[m - 1]
+          getAcademicMonthsForType(type).find(am => am.month === m)?.name || monthNames[m - 1]
         );
-        toast.error(`❌ Bulan ${names.join(', ')} sudah LUNAS!`);
+        toast.error(`❌ Bulan ${names.join(', ')} (${type.name}) sudah LUNAS!`);
         return;
       }
     }
 
-    if (formData.amount <= 0) {
-      toast.error('Jumlah pembayaran harus lebih dari 0');
-      return;
-    }
-
-    if (!selectedPaymentType?.isRecurring && isNonRecurringPaid && !formData.isInstallment) {
-      toast.error(`❌ Pembayaran ${selectedPaymentType?.name} sudah LUNAS!`);
-      return;
+    for (const type of nonRecurringTypes) {
+      const amount = formData.amountByType[type.id] || 0;
+      if (amount <= 0) {
+        toast.error(`Jumlah pembayaran ${type.name} harus lebih dari 0`);
+        return;
+      }
+      if (hasNonRecurringPaid(selectedStudent.id, type.id) && !formData.isInstallment) {
+        toast.error(`❌ Pembayaran ${type.name} sudah LUNAS!`);
+        return;
+      }
     }
 
     if (formData.isInstallment && formData.totalInstallments < 2) {
@@ -222,45 +265,60 @@ export function PaymentForm() {
     try {
       const now = new Date();
       const paymentDate = now.toISOString().split('T')[0];
-      const isMultiMonth = !!selectedPaymentType?.isRecurring;
-      const unitAmount = selectedPaymentType?.amount || 0;
 
-      const monthsToProcess = isMultiMonth ? formData.months : [null];
+      const batches: { type: PaymentType; month: number | null }[] = [];
+      for (const type of recurringTypes) {
+        for (const m of (formData.monthsByType[type.id] || [])) {
+          batches.push({ type, month: m });
+        }
+      }
+      for (const type of nonRecurringTypes) {
+        batches.push({ type, month: null });
+      }
 
       const createdPayments: Payment[] = [];
 
-      for (const month of monthsToProcess) {
+      for (const batch of batches) {
+        const { type, month } = batch;
         const selectedMonthData = month !== null
-          ? academicMonths.find(m => m.month === month)
+          ? getAcademicMonthsForType(type).find(am => am.month === month)
           : undefined;
 
-        const paymentYear = isMultiMonth && selectedMonthData
+        const paymentYear = month !== null && selectedMonthData
           ? selectedMonthData.year
           : now.getFullYear();
+
+        const amount = type.isRecurring
+          ? (type.amount || 0)
+          : (formData.amountByType[type.id] || 0);
+
+        const isInstallmentForType = !type.isRecurring && isSingleNonRecurring && formData.isInstallment;
 
         const paymentData = {
           studentId: selectedStudent.id,
           studentName: selectedStudent.name,
           studentNis: selectedStudent.nis || '',
           className: selectedStudent.className,
-          paymentTypeId: parseInt(formData.paymentTypeId),
-          paymentTypeName: selectedPaymentType?.name || '',
-          amount: isMultiMonth ? unitAmount : formData.amount,
-          month: isMultiMonth ? month : null,
+          paymentTypeId: type.id,
+          paymentTypeName: type.name,
+          amount,
+          month: type.isRecurring ? month : null,
           year: paymentYear,
           academicYearId: activeYear.id,
           paymentDate,
           paymentMethod: formData.paymentMethod,
           notes: formData.notes,
           createdBy: adminInfo?.name || 'admin',
-          isInstallment: isMultiMonth ? false : formData.isInstallment,
-          installmentNumber: isMultiMonth ? null : (formData.isInstallment ? formData.installmentNumber : null),
-          totalInstallments: isMultiMonth ? null : (formData.isInstallment ? formData.totalInstallments : null),
-          isPaidOff: isMultiMonth ? true : (formData.isPaidOff || !formData.isInstallment),
-          originalAmount: isMultiMonth ? null : (formData.isInstallment ? formData.originalAmount : null),
-          remainingAmount: isMultiMonth ? null : (formData.isInstallment && !formData.isPaidOff
-            ? formData.originalAmount - formData.amount
-            : null),
+          isInstallment: isInstallmentForType,
+          installmentNumber: isInstallmentForType ? formData.installmentNumber : null,
+          totalInstallments: isInstallmentForType ? formData.totalInstallments : null,
+          isPaidOff: isInstallmentForType
+            ? (formData.isPaidOff || !formData.isInstallment)
+            : true,
+          originalAmount: isInstallmentForType ? formData.originalAmount : null,
+          remainingAmount: isInstallmentForType && !formData.isPaidOff
+            ? formData.originalAmount - amount
+            : null,
         };
 
         const response = await fetch('/api/payments', {
@@ -283,8 +341,8 @@ export function PaymentForm() {
         setShowReceipt(true);
       }
 
-      const message = isMultiMonth && createdPayments.length > 1
-        ? `✅ Pembayaran ${createdPayments.length} bulan berhasil dicatat!`
+      const message = createdPayments.length > 1
+        ? `✅ ${createdPayments.length} pembayaran berhasil dicatat!`
         : formData.isPaidOff
           ? '✅ Pembayaran berhasil dicatat dan ditandai LUNAS!'
           : formData.isInstallment
@@ -294,9 +352,9 @@ export function PaymentForm() {
       toast.success(message);
 
       setFormData({
-        paymentTypeId: '',
-        months: [],
-        amount: 0,
+        selectedTypeIds: [],
+        monthsByType: {},
+        amountByType: {},
         paymentMethod: 'cash',
         notes: '',
         isInstallment: false,
@@ -403,77 +461,117 @@ export function PaymentForm() {
               )}
 
               <div className="space-y-2">
-                <Label>Jenis Pembayaran *</Label>
-                <Select
-                  value={formData.paymentTypeId}
-                  onValueChange={handlePaymentTypeChange}
-                  disabled={isSubmitting}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih jenis pembayaran" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {paymentTypes.map(type => (
-                      <SelectItem key={type.id} value={type.id.toString()}>
-                        {type.name} - {formatCurrency(type.amount)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="flex items-center gap-2">
+                  <Layers className="h-4 w-4" />
+                  Jenis Pembayaran * <span className="text-xs text-muted-foreground">(bisa pilih lebih dari satu)</span>
+                </Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {paymentTypes.map(type => {
+                    const isSelected = formData.selectedTypeIds.includes(type.id);
+                    const isPaid = !type.isRecurring && selectedStudent
+                      ? hasNonRecurringPaid(selectedStudent.id, type.id)
+                      : false;
+                    return (
+                      <button
+                        key={type.id}
+                        type="button"
+                        onClick={() => toggleType(type.id)}
+                        disabled={isSubmitting}
+                        className={`flex items-center justify-between rounded-lg border p-3 text-left transition-colors ${
+                          isSelected
+                            ? 'border-primary bg-primary/5'
+                            : 'hover:bg-muted'
+                        } ${isPaid ? 'opacity-60' : ''}`}
+                        title={isPaid ? `${type.name} sudah lunas` : type.name}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Checkbox checked={isSelected} className="pointer-events-none" />
+                          <span className="text-sm font-medium">{type.name}</span>
+                          {isPaid && <span className="text-xs text-green-600">✓ Lunas</span>}
+                        </div>
+                        <span className="text-sm text-muted-foreground">{formatCurrency(type.amount)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              {isNonRecurringPaid && !formData.isInstallment && (
-                <Alert className="border-red-200 bg-red-50 dark:bg-red-950/20">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
-                  <AlertDescription className="text-red-600 text-sm">
-                    ⚠️ Siswa ini sudah pernah membayar <strong>{selectedPaymentType?.name}</strong> dan statusnya LUNAS.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {selectedPaymentType?.isRecurring && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Bulan Pembayaran *</Label>
-                    <div className="flex gap-1">
-                      <Button type="button" variant="outline" size="sm" onClick={selectAllMonths} disabled={isSubmitting}>
-                        Semua
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={clearMonths} disabled={isSubmitting}>
-                        Bersihkan
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-                    {academicMonths.map((m) => {
-                      const isPaid = paidMonths.includes(m.month);
-                      const isSelected = formData.months.includes(m.month);
-                      return (
-                        <Button
-                          key={`${m.month}-${m.year}`}
-                          type="button"
-                          size="sm"
-                          variant={isSelected ? 'default' : isPaid ? 'secondary' : 'outline'}
-                          onClick={() => toggleMonth(m.month)}
-                          disabled={isPaid || isSubmitting}
-                          className={isPaid ? 'opacity-60' : ''}
-                          title={isPaid ? `${m.name} ${m.year} (Sudah lunas)` : `${m.name} ${m.year}`}
-                        >
-                          {m.name.slice(0, 3)}
-                          {isPaid && ' ✓'}
+              {recurringTypes.map(type => {
+                const academicMonths = getAcademicMonthsForType(type);
+                const paidMonths = paidMonthsForType(type.id);
+                const selectedMonths = formData.monthsByType[type.id] || [];
+                return (
+                  <div key={type.id} className="space-y-2 rounded-lg border p-3">
+                    <div className="flex items-center justify-between">
+                      <Label>{type.name} - Bulan *</Label>
+                      <div className="flex gap-1">
+                        <Button type="button" variant="outline" size="sm" onClick={() => selectAllMonths(type.id)} disabled={isSubmitting}>
+                          Semua
                         </Button>
-                      );
-                    })}
+                        <Button type="button" variant="outline" size="sm" onClick={() => clearMonths(type.id)} disabled={isSubmitting}>
+                          Bersihkan
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                      {academicMonths.map((m) => {
+                        const isPaid = paidMonths.includes(m.month);
+                        const isSelected = selectedMonths.includes(m.month);
+                        return (
+                          <Button
+                            key={`${type.id}-${m.month}-${m.year}`}
+                            type="button"
+                            size="sm"
+                            variant={isSelected ? 'default' : isPaid ? 'secondary' : 'outline'}
+                            onClick={() => toggleMonth(type.id, m.month)}
+                            disabled={isPaid || isSubmitting}
+                            className={isPaid ? 'opacity-60' : ''}
+                            title={isPaid ? `${m.name} ${m.year} (Sudah lunas)` : `${m.name} ${m.year}`}
+                          >
+                            {m.name.slice(0, 3)}
+                            {isPaid && ' ✓'}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedMonths.length > 0
+                        ? `${selectedMonths.length} bulan dipilih • Subtotal ${formatCurrency(selectedMonths.length * (type.amount || 0))}`
+                        : 'Klik bulan untuk memilih (bisa lebih dari satu)'}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {formData.months.length > 0
-                      ? `${formData.months.length} bulan dipilih • Total ${formatCurrency(formData.amount)}`
-                      : 'Klik bulan untuk memilih (bisa lebih dari satu)'}
-                  </p>
-                </div>
-              )}
+                );
+              })}
 
-              {selectedPaymentType?.allowInstallment && (
+              {nonRecurringTypes.map(type => {
+                const isPaid = selectedStudent ? hasNonRecurringPaid(selectedStudent.id, type.id) : false;
+                const amount = formData.amountByType[type.id] || 0;
+                return (
+                  <div key={type.id} className="space-y-2 rounded-lg border p-3">
+                    <Label>{type.name} *</Label>
+                    <Input
+                      type="number"
+                      value={amount || ''}
+                      onChange={(e) => handleAmountChange(type.id, parseInt(e.target.value) || 0)}
+                      min="0"
+                      disabled={isSubmitting}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {amount > 0 ? formatCurrency(amount) : 'Masukkan jumlah pembayaran'}
+                    </p>
+                    {isPaid && !formData.isInstallment && (
+                      <Alert className="border-red-200 bg-red-50 dark:bg-red-950/20">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-red-600 text-sm">
+                          ⚠️ Siswa ini sudah pernah membayar <strong>{type.name}</strong> dan statusnya LUNAS.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                );
+              })}
+
+              {isSingleNonRecurring && nonRecurringTypes[0]?.allowInstallment && (
                 <div className="space-y-3 rounded-lg border p-3 bg-blue-50/50 dark:bg-blue-950/20">
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -522,40 +620,23 @@ export function PaymentForm() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label>Jumlah Bayar {selectedPaymentType?.isRecurring ? '(Otomatis)' : '*'}</Label>
-                <Input
-                  type="number"
-                  value={formData.amount || ''}
-                  onChange={(e) => setFormData({ ...formData, amount: parseInt(e.target.value) || 0 })}
-                  min="0"
-                  disabled={isSubmitting || !!selectedPaymentType?.isRecurring}
-                />
-                {formData.amount > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {formatCurrency(formData.amount)}
-                    {selectedPaymentType?.isRecurring && formData.months.length > 0 && (
-                      <> ({formData.months.length} bulan × {formatCurrency(selectedPaymentType.amount)})</>
-                    )}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2 rounded-lg border p-3 bg-green-50/50 dark:bg-green-950/20">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="isPaidOff"
-                    checked={formData.isPaidOff}
-                    onCheckedChange={(checked) => 
-                      setFormData({ ...formData, isPaidOff: checked as boolean })
-                    }
-                    disabled={isSubmitting}
-                  />
-                  <Label htmlFor="isPaidOff" className="text-sm font-medium cursor-pointer">
-                    ✅ Tandai sebagai LUNAS
-                  </Label>
+              {selectedPaymentTypes.length > 0 && !formData.isInstallment && (
+                <div className="space-y-2 rounded-lg border p-3 bg-green-50/50 dark:bg-green-950/20">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="isPaidOff"
+                      checked={formData.isPaidOff}
+                      onCheckedChange={(checked) => 
+                        setFormData({ ...formData, isPaidOff: checked as boolean })
+                      }
+                      disabled={isSubmitting}
+                    />
+                    <Label htmlFor="isPaidOff" className="text-sm font-medium cursor-pointer">
+                      ✅ Tandai sebagai LUNAS
+                    </Label>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="space-y-2">
                 <Label>Metode Pembayaran</Label>
@@ -588,7 +669,7 @@ export function PaymentForm() {
                 />
               </div>
 
-              <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+              <Button type="submit" className="w-full" size="lg" disabled={isSubmitting || selectedPaymentTypes.length === 0}>
                 {isSubmitting ? (
                   <>
                     <LoadingSpinner size="sm" className="mr-2" />
@@ -597,7 +678,7 @@ export function PaymentForm() {
                 ) : (
                   <>
                     <Check className="mr-2 h-4 w-4" />
-                    Simpan Pembayaran
+                    Simpan Pembayaran {selectedPaymentTypes.length > 0 && `(${formatCurrency(totalAmount)})`}
                   </>
                 )}
               </Button>
@@ -611,7 +692,7 @@ export function PaymentForm() {
             <CardDescription>Pratinjau bukti pembayaran</CardDescription>
           </CardHeader>
           <CardContent>
-            {selectedStudent && formData.paymentTypeId ? (
+            {selectedStudent && selectedPaymentTypes.length > 0 ? (
               <div className="rounded-lg border p-6 space-y-4">
                 <div className="text-center border-b pb-4">
                   <h3 className="font-bold text-lg">{schoolInfo?.name || 'SMP Negeri 1'}</h3>
@@ -645,21 +726,23 @@ export function PaymentForm() {
                 </div>
 
                 <div className="space-y-2 text-sm border-t pt-4">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Jenis Pembayaran:</span>
-                    <span>{selectedPaymentType?.name}</span>
-                  </div>
-                    {selectedPaymentType?.isRecurring && formData.months.length > 0 && (
-                      <div className="flex justify-between gap-4">
-                        <span className="text-muted-foreground shrink-0">Bulan:</span>
-                        <span className="text-right font-medium">
-                          {formData.months.map(m => {
-                            const am = academicMonths.find(x => x.month === m);
-                            return `${am?.name || monthNames[m - 1]} ${am?.year || ''}`;
-                          }).join(', ')}
+                  {selectedPaymentTypes.map(type => {
+                    const amount = getTypeAmount(type);
+                    const monthsLabel = type.isRecurring ? getMonthsLabel(type) : '';
+                    return (
+                      <div key={type.id} className="flex justify-between gap-4">
+                        <span className="shrink-0">
+                          {type.name}
+                          {type.isRecurring && monthsLabel && (
+                            <span className="block text-xs text-muted-foreground">
+                              {formData.monthsByType[type.id]?.length || 0} bulan: {monthsLabel}
+                            </span>
+                          )}
                         </span>
+                        <span className="text-right font-medium">{formatCurrency(amount)}</span>
                       </div>
-                    )}
+                    );
+                  })}
                   {formData.isInstallment && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Cicilan:</span>
@@ -677,7 +760,7 @@ export function PaymentForm() {
                 <div className="border-t pt-4">
                   <div className="flex justify-between text-lg font-bold">
                     <span>Total:</span>
-                    <span className="text-green-600">{formatCurrency(formData.amount)}</span>
+                    <span className="text-green-600">{formatCurrency(totalAmount)}</span>
                   </div>
                 </div>
               </div>
