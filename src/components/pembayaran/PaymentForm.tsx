@@ -30,6 +30,7 @@ import { usePayments } from '@/hooks/usePayments';
 import { usePaymentTypes } from '@/hooks/usePaymentTypes';
 import { useAcademicYears } from '@/hooks/useAcademicYears';
 import { useSchoolInfo } from '@/hooks/useSchoolInfo';
+import { useAuth } from '@/hooks/useAuth';
 import { formatCurrency } from '@/lib/utils/currency';
 import { monthNames, getAcademicMonths } from '../../lib/utils/date';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
@@ -41,6 +42,7 @@ export function PaymentForm() {
   const { paymentTypes, isLoading: typesLoading } = usePaymentTypes();
   const { activeYear } = useAcademicYears();
   const { schoolInfo } = useSchoolInfo();
+  const { adminInfo } = useAuth();
 
   const [search, setSearch] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -250,6 +252,7 @@ export function PaymentForm() {
           paymentDate,
           paymentMethod: formData.paymentMethod,
           notes: formData.notes,
+          createdBy: adminInfo?.name || 'admin',
           isInstallment: isMultiMonth ? false : formData.isInstallment,
           installmentNumber: isMultiMonth ? null : (formData.isInstallment ? formData.installmentNumber : null),
           totalInstallments: isMultiMonth ? null : (formData.isInstallment ? formData.totalInstallments : null),

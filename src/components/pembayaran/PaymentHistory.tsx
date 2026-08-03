@@ -81,6 +81,7 @@ export function PaymentHistory() {
     notes: true,
     status: true,
     amount: true,
+    createdBy: true,
   });
 
   const columnLabels: Record<string, string> = {
@@ -94,6 +95,7 @@ export function PaymentHistory() {
     notes: 'Catatan',
     status: 'Status',
     amount: 'Jumlah',
+    createdBy: 'Petugas',
   };
 
   const itemsPerPage = 15;
@@ -104,7 +106,8 @@ export function PaymentHistory() {
       (payment.studentNis || '').includes(search) ||
       payment.receiptNumber.toLowerCase().includes(search.toLowerCase()) ||
       (payment.paymentMethod || '').toLowerCase().includes(search.toLowerCase()) ||
-      (payment.notes || '').toLowerCase().includes(search.toLowerCase());
+      (payment.notes || '').toLowerCase().includes(search.toLowerCase()) ||
+      (payment.createdBy || '').toLowerCase().includes(search.toLowerCase());
     const matchType = filterType === 'all' || payment.paymentTypeId.toString() === filterType;
     const matchMonth = filterMonth === 'all' || 
       (payment.month && payment.month.toString() === filterMonth);
@@ -208,7 +211,7 @@ export function PaymentHistory() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Cari nama, NIS, no. kuitansi, metode, catatan..."
+                  placeholder="Cari nama, NIS, kuitansi, petugas..."
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
@@ -311,6 +314,7 @@ export function PaymentHistory() {
                       {columns.method && <TableHead>Metode</TableHead>}
                       {columns.notes && <TableHead>Catatan</TableHead>}
                       {columns.status && <TableHead>Status</TableHead>}
+                      {columns.createdBy && <TableHead>Petugas</TableHead>}
                       {columns.amount && <TableHead className="text-right">Jumlah</TableHead>}
                       <TableHead className="text-right">Aksi</TableHead>
                     </TableRow>
@@ -384,6 +388,11 @@ export function PaymentHistory() {
                             ) : (
                               <Badge variant="default">Lunas</Badge>
                             )}
+                          </TableCell>
+                        )}
+                        {columns.createdBy && (
+                          <TableCell>
+                            <span className="text-sm">{payment.createdBy || '-'}</span>
                           </TableCell>
                         )}
                         {columns.amount && (
