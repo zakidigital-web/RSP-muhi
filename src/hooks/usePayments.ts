@@ -52,6 +52,29 @@ export function usePayments() {
     }
   }, [loadPayments]);
 
+  // Create a batch of payments that share one receipt number
+  const addPaymentBatch = useCallback(async (items: Omit<Payment, 'id' | 'createdAt' | 'receiptNumber'>[]) => {
+    try {
+      const response = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'Failed to add payments');
+      }
+
+      const created = await response.json();
+      await loadPayments();
+      return created as Payment[];
+    } catch (error) {
+      console.error('Error adding payments:', error);
+      throw error;
+    }
+  }, [loadPayments]);
+
   const updatePayment = useCallback(async (payment: Payment) => {
     try {
       const response = await fetch(`/api/payments?id=${payment.id}`, {
@@ -89,13 +112,37 @@ export function usePayments() {
     }
   }, [payments, loadPayments]);
 
+  // Delete all payments sharing a receipt number (a whole batch)
+  const deletePaymentBatch = useCallback(async (receiptNumber: string) => {
+    try {
+      const batch = payments.filter(p => p.receiptNumber === receiptNumber);
+      if (batch.length > 0) {
+        setDeletedPayments(prev => [...prev, ...batch]);
+      }
+
+      const response = await fetch(`/api/payments?receiptNumber=${encodeURIComponent(receiptNumber)}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Failed to delete payments');
+
+      await loadPayments();
+    } catch (error) {
+      console.error('Error deleting payments:', error);
+      throw error;
+    }
+  }, [payments, loadPayments]);
+
   const undoDelete = useCallback(async () => {
     if (deletedPayments.length > 0) {
-      const lastDeleted = deletedPayments[deletedPayments.length - 1];
+      const lastReceipt = deletedPayments[deletedPayments.length - 1].receiptNumber;
+      const toRestore = deletedPayments.filter(p => p.receiptNumber === lastReceipt);
       try {
-        await addPayment(lastDeleted);
-        setDeletedPayments(prev => prev.slice(0, -1));
-        return lastDeleted;
+        for (const p of toRestore) {
+          await addPayment(p);
+        }
+        setDeletedPayments(prev => prev.filter(p => p.receiptNumber !== lastReceipt));
+        return toRestore[0];
       } catch (error) {
         console.error('Error restoring payment:', error);
         return null;
@@ -128,8 +175,10 @@ export function usePayments() {
     payments,
     isLoading,
     addPayment,
+    addPaymentBatch,
     updatePayment,
     deletePayment,
+    deletePaymentBatch,
     undoDelete,
     getPaymentsByStudent,
     getPaymentsByMonth,

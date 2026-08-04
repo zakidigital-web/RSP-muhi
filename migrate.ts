@@ -16,6 +16,8 @@ async function migrate() {
       'ALTER TABLE payment_types ADD COLUMN from_year INTEGER',
       'ALTER TABLE payment_types ADD COLUMN to_month INTEGER',
       'ALTER TABLE payment_types ADD COLUMN to_year INTEGER',
+      // Allow multiple payment rows (a batch) to share the same receipt number
+      'DROP INDEX IF EXISTS payments_receipt_number_unique',
     ];
 
     for (const q of queries) {

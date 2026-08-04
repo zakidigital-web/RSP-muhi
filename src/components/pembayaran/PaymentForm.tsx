@@ -38,7 +38,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function PaymentForm() {
   const { students, isLoading: studentsLoading, getActiveStudents } = useStudents();
-  const { payments } = usePayments();
+  const { payments, addPaymentBatch } = usePayments();
   const { paymentTypes, isLoading: typesLoading } = usePaymentTypes();
   const { activeYear } = useAcademicYears();
   const { schoolInfo } = useSchoolInfo();
@@ -48,7 +48,7 @@ export function PaymentForm() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
-  const [lastPayment, setLastPayment] = useState<Payment | null>(null);
+  const [lastPayments, setLastPayments] = useState<Payment[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -142,7 +142,7 @@ export function PaymentForm() {
         delete amountByType[typeId];
       } else {
         const type = paymentTypes.find(t => t.id === typeId);
-        if (type && !type.isRecurring) {
+        if (type) {
           amountByType[typeId] = type.amount || 0;
         }
       }
@@ -191,7 +191,7 @@ export function PaymentForm() {
 
   const getTypeAmount = (type: PaymentType): number => {
     if (type.isRecurring) {
-      return (formData.monthsByType[type.id]?.length || 0) * (type.amount || 0);
+      return (formData.monthsByType[type.id]?.length || 0) * (formData.amountByType[type.id] || type.amount || 0);
     }
     return formData.amountByType[type.id] || 0;
   };
@@ -278,8 +278,7 @@ export function PaymentForm() {
 
       const createdPayments: Payment[] = [];
 
-      for (const batch of batches) {
-        const { type, month } = batch;
+      const items: Omit<Payment, 'id' | 'createdAt' | 'receiptNumber'>[] = batches.map(({ type, month }) => {
         const selectedMonthData = month !== null
           ? getAcademicMonthsForType(type).find(am => am.month === month)
           : undefined;
@@ -289,12 +288,12 @@ export function PaymentForm() {
           : now.getFullYear();
 
         const amount = type.isRecurring
-          ? (type.amount || 0)
+          ? (formData.amountByType[type.id] || type.amount || 0)
           : (formData.amountByType[type.id] || 0);
 
         const isInstallmentForType = !type.isRecurring && isSingleNonRecurring && formData.isInstallment;
 
-        const paymentData = {
+        return {
           studentId: selectedStudent.id,
           studentName: selectedStudent.name,
           studentNis: selectedStudent.nis || '',
@@ -320,24 +319,15 @@ export function PaymentForm() {
             ? formData.originalAmount - amount
             : null,
         };
+      });
 
-        const response = await fetch('/api/payments', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(paymentData),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Gagal menyimpan pembayaran');
-        }
-
-        const created = await response.json();
-        createdPayments.push(created);
+      if (items.length > 0) {
+        const created = await addPaymentBatch(items);
+        createdPayments.push(...created);
       }
 
       if (createdPayments.length > 0) {
-        setLastPayment(createdPayments[createdPayments.length - 1]);
+        setLastPayments(createdPayments);
         setShowReceipt(true);
       }
 
@@ -507,9 +497,10 @@ export function PaymentForm() {
                 const academicMonths = getAcademicMonthsForType(type);
                 const paidMonths = paidMonthsForType(type.id);
                 const selectedMonths = formData.monthsByType[type.id] || [];
+                const nominal = formData.amountByType[type.id] || type.amount || 0;
                 return (
                   <div key={type.id} className="space-y-2 rounded-lg border p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <Label>{type.name} - Bulan *</Label>
                       <div className="flex gap-1">
                         <Button type="button" variant="outline" size="sm" onClick={() => selectAllMonths(type.id)} disabled={isSubmitting}>
@@ -518,6 +509,19 @@ export function PaymentForm() {
                         <Button type="button" variant="outline" size="sm" onClick={() => clearMonths(type.id)} disabled={isSubmitting}>
                           Bersihkan
                         </Button>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs text-muted-foreground shrink-0">Nominal / bulan</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={nominal || ''}
+                          onChange={(e) => handleAmountChange(type.id, parseInt(e.target.value) || 0)}
+                          disabled={isSubmitting}
+                          className="w-32 h-8"
+                        />
                       </div>
                     </div>
                     <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
@@ -543,7 +547,7 @@ export function PaymentForm() {
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {selectedMonths.length > 0
-                        ? `${selectedMonths.length} bulan dipilih • Subtotal ${formatCurrency(selectedMonths.length * (type.amount || 0))}`
+                        ? `${selectedMonths.length} bulan dipilih • Subtotal ${formatCurrency(selectedMonths.length * nominal)}`
                         : 'Klik bulan untuk memilih (bisa lebih dari satu)'}
                     </p>
                   </div>
@@ -789,8 +793,8 @@ export function PaymentForm() {
               Cetak Kuitansi
             </DialogTitle>
           </DialogHeader>
-          {lastPayment && (
-            <ReceiptPrint payment={lastPayment} onClose={() => setShowReceipt(false)} />
+          {lastPayments.length > 0 && (
+            <ReceiptPrint payments={lastPayments} onClose={() => setShowReceipt(false)} />
           )}
         </DialogContent>
       </Dialog>

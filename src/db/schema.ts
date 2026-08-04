@@ -67,7 +67,7 @@ export const payments = sqliteTable('payments', {
   year: integer('year').notNull(),
   academicYearId: integer('academic_year_id').references(() => academicYears.id).notNull(),
   paymentDate: text('payment_date').notNull(),
-  receiptNumber: text('receipt_number').notNull().unique(),
+  receiptNumber: text('receipt_number').notNull(),
   paymentMethod: text('payment_method').notNull(),
   notes: text('notes'),
   createdBy: text('created_by').notNull().default('admin'),

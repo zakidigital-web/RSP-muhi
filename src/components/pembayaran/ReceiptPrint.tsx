@@ -16,18 +16,18 @@ const monthNames = globalMonthNames || [
 ];
 
 interface ReceiptPrintProps {
-  payment: Payment;
+  payments: Payment[];
   onClose: () => void;
 }
 
-export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
+export function ReceiptPrint({ payments, onClose }: ReceiptPrintProps) {
   const { schoolInfo: dbSchoolInfo, isLoading } = useSchoolInfo();
   const bleRef = useRef<{
     device?: BluetoothDevice;
     server?: BluetoothRemoteGATTServer;
     characteristic?: BluetoothRemoteGATTCharacteristic;
   } | null>(null);
-  
+
   // Default values if school info not set in DB
   const schoolInfo = dbSchoolInfo || {
     name: 'SMP Muhammadiyah 1 Genteng',
@@ -39,6 +39,13 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     paymentSectionName: 'Bagian Pembayaran',
   };
 
+  const firstPayment = payments[0];
+  const totalAmount = payments.reduce((sum, p) => sum + p.amount, 0);
+  const receiptNumber = firstPayment.receiptNumber;
+
+  const itemLabel = (p: Payment): string =>
+    `${p.paymentTypeName}${p.month ? ` - ${monthNames[p.month - 1]} ${p.year}` : ''}`;
+
   const formatFullDate = (dateStr: string) => {
     const d = new Date(dateStr);
     const day = d.getUTCDate();
@@ -48,12 +55,23 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
   };
 
   const handlePrintA4 = () => {
+    const itemRows = payments
+      .map(
+        (p, i) => `
+          <div class="item-row">
+            <span class="item-no">${i + 1}.</span>
+            <span class="item-name">${itemLabel(p)}</span>
+            <span class="item-amount">${formatCurrency(p.amount)}</span>
+          </div>`
+      )
+      .join('');
+
     const content = `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Kuitansi - ${payment.receiptNumber}</title>
+        <title>Kuitansi - ${receiptNumber}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { 
@@ -109,6 +127,29 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
           .value { 
             flex: 1;
             font-weight: 500;
+          }
+          .items { 
+            width: 100%; 
+            margin: 4px 0 12px 0; 
+          }
+          .item-row { 
+            display: flex; 
+            align-items: baseline; 
+            font-size: 14px; 
+            padding: 3px 0;
+            border-bottom: 1px dotted #ccc;
+          }
+          .item-no { 
+            width: 28px; 
+            flex-shrink: 0; 
+          }
+          .item-name { 
+            flex: 1; 
+            padding-right: 10px;
+          }
+          .item-amount { 
+            font-weight: 500; 
+            white-space: nowrap; 
           }
           .amount-box { 
             border: 2px solid #000; 
@@ -177,34 +218,37 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         </div>
         
         <div class="receipt-no">
-          <strong>No: ${payment.receiptNumber}</strong>
+          <strong>No: ${receiptNumber}</strong>
         </div>
         
         <div class="content">
           <div class="row">
             <span class="label">Telah diterima dari</span>
-            <span class="value">: <strong>${payment.studentName}</strong></span>
+            <span class="value">: <strong>${firstPayment.studentName}</strong></span>
           </div>
           <div class="row">
             <span class="label">NIS</span>
-            <span class="value">: ${payment.studentNis}</span>
+            <span class="value">: ${firstPayment.studentNis}</span>
           </div>
           <div class="row">
             <span class="label">Kelas</span>
-            <span class="value">: ${payment.className}</span>
+            <span class="value">: ${firstPayment.className}</span>
           </div>
           <div class="row">
             <span class="label">Untuk Pembayaran</span>
-            <span class="value">: ${payment.paymentTypeName}${payment.month ? ` - ${monthNames[payment.month - 1]} ${payment.year}` : ''}</span>
+            <span class="value">:</span>
+          </div>
+          <div class="items">
+            ${itemRows}
           </div>
           <div class="row">
             <span class="label">Metode Pembayaran</span>
-            <span class="value">: ${payment.paymentMethod === 'cash' ? 'Tunai' : payment.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya'}</span>
+            <span class="value">: ${firstPayment.paymentMethod === 'cash' ? 'Tunai' : firstPayment.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya'}</span>
           </div>
-          ${payment.notes ? `
+          ${firstPayment.notes ? `
           <div class="row">
             <span class="label">Catatan</span>
-            <span class="value">: ${payment.notes}</span>
+            <span class="value">: ${firstPayment.notes}</span>
           </div>
           ` : ''}
         </div>
@@ -212,20 +256,20 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         <div class="amount-box">
           <div class="amount-row">
             <span>Jumlah:</span>
-            <span>${formatCurrency(payment.amount)}</span>
+            <span>${formatCurrency(totalAmount)}</span>
           </div>
           <div class="terbilang">
-            <strong>Terbilang:</strong> ${numberToWords(payment.amount)}
+            <strong>Terbilang:</strong> ${numberToWords(totalAmount)}
           </div>
         </div>
         
         <div class="footer">
           <div class="signature">
             <p>Penyetor,</p>
-            <div class="signature-line">${payment.studentName}</div>
+            <div class="signature-line">${firstPayment.studentName}</div>
           </div>
           <div class="signature">
-            <p>${new Date(payment.paymentDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            <p>${new Date(firstPayment.paymentDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
             <p>Bendahara,</p>
             <div class="signature-line">(.....................)</div>
           </div>
@@ -356,7 +400,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
       }
 
       // Bangun ESC/POS bytes dari data kuitansi
-      const bytes = buildEscPosReceipt(payment, schoolInfo);
+      const bytes = buildEscPosReceipt(payments, schoolInfo);
 
       const CHUNK = 20;
       for (let i = 0; i < bytes.length; i += CHUNK) {
@@ -381,7 +425,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
 
   const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
-  const buildEscPosReceipt = (p: Payment, info: typeof schoolInfo) => {
+  const buildEscPosReceipt = (list: Payment[], info: typeof schoolInfo) => {
     const ESC = 0x1b;
     const GS = 0x1d;
     const encoder = new TextEncoder(); // UTF-8; kebanyakan printer modern kompatibel
@@ -415,6 +459,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
       return lines;
     };
 
+    const first = list[0];
     const lines: number[] = [];
     lines.push(...init());
     lines.push(...setCodePage(0));
@@ -440,23 +485,27 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     lines.push(...boldOn());
     lines.push(...text('KUITANSI PEMBAYARAN\r\n'));
     lines.push(...boldOff());
-    lines.push(...text(p.receiptNumber + '\r\n'));
+    lines.push(...text(first.receiptNumber + '\r\n'));
     lines.push(...sepThin());
 
     lines.push(...setAlign(0));
-    lines.push(...text('Tanggal   : ' + formatFullDate(p.paymentDate) + '\r\n'));
-    lines.push(...text('NIS       : ' + p.studentNis + '\r\n'));
-    lines.push(...text('Nama      : ' + p.studentName + '\r\n'));
-    lines.push(...text('Kelas     : ' + p.className + '\r\n'));
-    lines.push(...text('Pembayaran: ' + p.paymentTypeName + '\r\n'));
-    if (p.month) {
-      lines.push(...text('Periode   : ' + monthNames[p.month - 1] + ' ' + p.year + '\r\n'));
+    lines.push(...text('Tanggal   : ' + formatFullDate(first.paymentDate) + '\r\n'));
+    lines.push(...text('NIS       : ' + first.studentNis + '\r\n'));
+    lines.push(...text('Nama      : ' + first.studentName + '\r\n'));
+    lines.push(...text('Kelas     : ' + first.className + '\r\n'));
+    for (const [i, p] of list.entries()) {
+      const label = `${i + 1}. ${itemLabel(p)}`;
+      const wrapped = wrapText(label, 32);
+      for (const wl of wrapped) {
+        lines.push(...text(wl + '\r\n'));
+      }
+      lines.push(...text('   ' + safeCurrency(p.amount) + '\r\n'));
     }
     const metode =
-      p.paymentMethod === 'cash' ? 'Tunai' : p.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya';
+      first.paymentMethod === 'cash' ? 'Tunai' : first.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya';
     lines.push(...text('Metode    : ' + metode + '\r\n'));
-    if (p.notes) {
-      const noteLines = wrapText(p.notes, 32);
+    if (first.notes) {
+      const noteLines = wrapText(first.notes, 32);
       lines.push(...text('Catatan    :\r\n'));
       for (const nl of noteLines) {
         lines.push(...text('  ' + nl + '\r\n'));
@@ -468,7 +517,8 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
     lines.push(...boldOn());
     lines.push(...text('TOTAL BAYAR\r\n'));
     lines.push(...boldOff());
-    lines.push(...text(safeCurrency(p.amount) + '\r\n'));
+    const total = list.reduce((s, p) => s + p.amount, 0);
+    lines.push(...text(safeCurrency(total) + '\r\n'));
     lines.push(...sepThin());
     lines.push(...text('Terima kasih\r\n'));
     lines.push(...text('Dicetak: ' + new Date().toLocaleString('id-ID') + '\r\n'));
@@ -482,12 +532,22 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
   };
 
   const handlePrintThermal = () => {
+    const itemRows = payments
+      .map(
+        (p, i) => `
+          <div class="row">
+            <span>${i + 1}. ${p.paymentTypeName}${p.month ? ` ${monthNames[p.month - 1]} ${p.year}` : ''}</span>
+            <span>${formatCurrency(p.amount)}</span>
+          </div>`
+      )
+      .join('');
+
     const content = `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Kuitansi - ${payment.receiptNumber}</title>
+        <title>Kuitansi - ${receiptNumber}</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { 
@@ -562,47 +622,40 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         <div class="thick-line"></div>
         
         <div class="center bold receipt-title">KUITANSI PEMBAYARAN</div>
-        <div class="center" style="font-size: 10px;">${payment.receiptNumber}</div>
+        <div class="center" style="font-size: 10px;">${receiptNumber}</div>
         
         <div class="line"></div>
         
         <div class="row">
           <span>Tanggal</span>
-          <span>${formatFullDate(payment.paymentDate)}</span>
+          <span>${formatFullDate(firstPayment.paymentDate)}</span>
         </div>
         <div class="row">
           <span>NIS</span>
-          <span>${payment.studentNis}</span>
+          <span>${firstPayment.studentNis}</span>
         </div>
         <div style="margin: 4px 0;">
           <div style="font-size: 10px; color: #666;">Nama:</div>
-          <div class="bold">${payment.studentName}</div>
+          <div class="bold">${firstPayment.studentName}</div>
         </div>
         <div class="row">
           <span>Kelas</span>
-          <span>${payment.className}</span>
+          <span>${firstPayment.className}</span>
         </div>
         
         <div class="line"></div>
         
-        <div style="margin: 4px 0;">
-          <div style="font-size: 10px; color: #666;">Pembayaran:</div>
-          <div class="bold">${payment.paymentTypeName}</div>
-        </div>
-        ${payment.month ? `
-        <div class="row">
-          <span>Bulan</span>
-          <span>${monthNames[payment.month - 1]} ${payment.year}</span>
-        </div>
-        ` : ''}
+        <div style="margin: 4px 0; font-size: 10px; color: #666;">Pembayaran:</div>
+        ${itemRows}
+        
         <div class="row">
           <span>Metode</span>
-          <span>${payment.paymentMethod === 'cash' ? 'Tunai' : payment.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya'}</span>
+          <span>${firstPayment.paymentMethod === 'cash' ? 'Tunai' : firstPayment.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya'}</span>
         </div>
-        ${payment.notes ? `
+        ${firstPayment.notes ? `
         <div style="margin: 4px 0;">
           <div style="font-size: 10px; color: #666;">Catatan:</div>
-          <div>${payment.notes}</div>
+          <div>${firstPayment.notes}</div>
         </div>
         ` : ''}
         
@@ -610,7 +663,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
         
         <div class="amount">
           <div style="font-size: 11px; font-weight: normal; margin-bottom: 3px;">TOTAL BAYAR</div>
-          <div>${formatCurrency(payment.amount)}</div>
+          <div>${formatCurrency(totalAmount)}</div>
         </div>
         
         <div class="thick-line"></div>
@@ -628,7 +681,7 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
           <span>TTD Bagian Pembayaran</span>
         </div>
         <div class="row" style="margin-top: 28px;">
-          <span>( ${payment.studentName} )</span>
+          <span>( ${firstPayment.studentName} )</span>
           <span>( ${schoolInfo.paymentSectionName} )</span>
         </div>
         
@@ -711,61 +764,68 @@ export function ReceiptPrint({ payment, onClose }: ReceiptPrintProps) {
 
         <div className="text-center">
           <h4 className="font-semibold underline">KUITANSI PEMBAYARAN</h4>
-          <p className="text-sm font-mono">{payment.receiptNumber}</p>
+          <p className="text-sm font-mono">{receiptNumber}</p>
         </div>
 
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Nama:</span>
-            <span className="font-medium">{payment.studentName}</span>
+            <span className="font-medium">{firstPayment.studentName}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">NIS:</span>
-            <span>{payment.studentNis}</span>
+            <span>{firstPayment.studentNis}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Kelas:</span>
-            <span>{payment.className}</span>
+            <span>{firstPayment.className}</span>
           </div>
         </div>
 
         <div className="border-t pt-4 space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Pembayaran:</span>
-            <span>{payment.paymentTypeName}</span>
+          <p className="text-muted-foreground">Pembayaran:</p>
+          <div className="rounded-md border divide-y divide-border">
+            {payments.map((p, i) => (
+              <div key={p.id} className="flex items-center justify-between gap-4 px-3 py-2">
+                <span className="text-sm shrink-0">{i + 1}.</span>
+                <span className="flex-1 text-sm">
+                  {p.paymentTypeName}
+                  {p.month && (
+                    <span className="block text-xs text-muted-foreground">
+                      {monthNames[p.month - 1]} {p.year}
+                    </span>
+                  )}
+                </span>
+                <span className="text-sm font-medium">{formatCurrency(p.amount)}</span>
+              </div>
+            ))}
           </div>
-          {payment.month && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Bulan:</span>
-              <span>{monthNames[payment.month - 1]} {payment.year}</span>
-            </div>
-          )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Tanggal:</span>
-            <span>{new Date(payment.paymentDate).toLocaleDateString('id-ID')}</span>
+            <span>{new Date(firstPayment.paymentDate).toLocaleDateString('id-ID')}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Metode:</span>
             <span>
-              {payment.paymentMethod === 'cash' ? 'Tunai' : 
-               payment.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya'}
+              {firstPayment.paymentMethod === 'cash' ? 'Tunai' : 
+               firstPayment.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya'}
             </span>
           </div>
-          {payment.notes && (
+          {firstPayment.notes && (
             <div className="flex flex-col gap-1">
               <span className="text-muted-foreground">Catatan:</span>
-              <span className="text-sm">{payment.notes}</span>
+              <span className="text-sm">{firstPayment.notes}</span>
             </div>
           )}
         </div>
 
         <div className="border-t pt-4">
           <div className="flex justify-between text-lg font-bold">
-            <span>Total:</span>
-            <span className="text-green-600">{formatCurrency(payment.amount)}</span>
+            <span>Total ({payments.length} item):</span>
+            <span className="text-green-600">{formatCurrency(totalAmount)}</span>
           </div>
           <p className="text-xs text-muted-foreground italic mt-1">
-            Terbilang: {numberToWords(payment.amount)}
+            Terbilang: {numberToWords(totalAmount)}
           </p>
         </div>
       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,10 +45,12 @@ import {
   Trash2,
   Undo2,
   Columns3,
+  ChevronsDown,
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ReceiptPrint } from './ReceiptPrint';
+import { Payment } from '@/lib/types';
 import { toast } from 'sonner';
 import { usePayments } from '@/hooks/usePayments';
 import { usePaymentTypes } from '@/hooks/usePaymentTypes';
@@ -57,17 +59,22 @@ import { monthNames } from '@/lib/utils/date';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { EmptyState } from '@/components/ui/empty-state';
 
+interface ReceiptGroup {
+  receiptNumber: string;
+  payments: Payment[];
+}
+
 export function PaymentHistory() {
-  const { payments, isLoading, deletePayment: removePayment, undoDelete, getTotalAmount } = usePayments();
+  const { payments, isLoading, deletePaymentBatch, undoDelete } = usePayments();
   const { paymentTypes, isLoading: typesLoading } = usePaymentTypes();
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterMonth, setFilterMonth] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedPayment, setSelectedPayment] = useState<typeof payments[0] | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<ReceiptGroup | null>(null);
   const [showReceipt, setShowReceipt] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [paymentToDelete, setPaymentToDelete] = useState<typeof payments[0] | null>(null);
+  const [groupToDelete, setGroupToDelete] = useState<ReceiptGroup | null>(null);
   const [showUndoButton, setShowUndoButton] = useState(false);
 
   const [columns, setColumns] = useState({
@@ -100,41 +107,69 @@ export function PaymentHistory() {
 
   const itemsPerPage = 15;
 
-  const filteredPayments = payments.filter(payment => {
-    const matchSearch = 
-      payment.studentName.toLowerCase().includes(search.toLowerCase()) ||
-      (payment.studentNis || '').includes(search) ||
-      payment.receiptNumber.toLowerCase().includes(search.toLowerCase()) ||
-      (payment.paymentMethod || '').toLowerCase().includes(search.toLowerCase()) ||
-      (payment.notes || '').toLowerCase().includes(search.toLowerCase()) ||
-      (payment.createdBy || '').toLowerCase().includes(search.toLowerCase());
-    const matchType = filterType === 'all' || payment.paymentTypeId.toString() === filterType;
-    const matchMonth = filterMonth === 'all' || 
-      (payment.month && payment.month.toString() === filterMonth);
+  const groups = useMemo<ReceiptGroup[]>(() => {
+    const map = new Map<string, Payment[]>();
+    for (const p of payments) {
+      const list = map.get(p.receiptNumber) || [];
+      list.push(p);
+      map.set(p.receiptNumber, list);
+    }
+    return Array.from(map.entries())
+      .map(([receiptNumber, items]) => ({
+        receiptNumber,
+        payments: items.sort((a, b) => a.id - b.id),
+      }))
+      .sort((a, b) => {
+        const aDate = new Date(a.payments[0].paymentDate).getTime();
+        const bDate = new Date(b.payments[0].paymentDate).getTime();
+        if (bDate !== aDate) return bDate - aDate;
+        return b.payments[0].id - a.payments[0].id;
+      });
+  }, [payments]);
+
+  const itemLabel = (p: Payment): string =>
+    `${p.paymentTypeName}${p.month ? ` - ${monthNames[p.month - 1]} ${p.year}` : ''}`;
+
+  const filteredGroups = groups.filter(group => {
+    const matchSearch =
+      group.payments.some(p =>
+        p.studentName.toLowerCase().includes(search.toLowerCase()) ||
+        (p.studentNis || '').includes(search) ||
+        p.receiptNumber.toLowerCase().includes(search.toLowerCase()) ||
+        (p.paymentMethod || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.notes || '').toLowerCase().includes(search.toLowerCase()) ||
+        (p.createdBy || '').toLowerCase().includes(search.toLowerCase())
+      );
+    const matchType = filterType === 'all' ||
+      group.payments.some(p => p.paymentTypeId.toString() === filterType);
+    const matchMonth = filterMonth === 'all' ||
+      group.payments.some(p => p.month && p.month.toString() === filterMonth);
     return matchSearch && matchType && matchMonth;
   });
 
-  const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
-  const paginatedPayments = filteredPayments.slice(
+  const totalPages = Math.ceil(filteredGroups.length / itemsPerPage);
+  const paginatedGroups = filteredGroups.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
-  const handlePrint = (payment: typeof payments[0]) => {
-    setSelectedPayment(payment);
+  const totalAmount = filteredGroups.reduce((sum, g) => sum + g.payments.reduce((s, p) => s + p.amount, 0), 0);
+
+  const handlePrint = (group: ReceiptGroup) => {
+    setSelectedGroup(group);
     setShowReceipt(true);
   };
 
-  const handleDelete = (payment: typeof payments[0]) => {
-    setPaymentToDelete(payment);
+  const handleDelete = (group: ReceiptGroup) => {
+    setGroupToDelete(group);
     setIsDeleteDialogOpen(true);
   };
 
   const confirmDelete = async () => {
-    if (paymentToDelete) {
+    if (groupToDelete) {
       try {
-        await removePayment(paymentToDelete.id);
-        toast.success('Pembayaran berhasil dihapus', {
+        await deletePaymentBatch(groupToDelete.receiptNumber);
+        toast.success('Kuitansi berhasil dihapus', {
           action: {
             label: 'Undo',
             onClick: handleUndo,
@@ -143,11 +178,11 @@ export function PaymentHistory() {
         setShowUndoButton(true);
         setTimeout(() => setShowUndoButton(false), 5000);
       } catch (error) {
-        toast.error('Gagal menghapus pembayaran');
+        toast.error('Gagal menghapus kuitansi');
       }
     }
     setIsDeleteDialogOpen(false);
-    setPaymentToDelete(null);
+    setGroupToDelete(null);
   };
 
   const handleUndo = async () => {
@@ -157,8 +192,6 @@ export function PaymentHistory() {
       setShowUndoButton(false);
     }
   };
-
-  const totalAmount = getTotalAmount(filteredPayments);
 
   if (isLoading || typesLoading) {
     return (
@@ -182,7 +215,7 @@ export function PaymentHistory() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Riwayat Pembayaran</h1>
           <p className="text-muted-foreground">
-            Daftar semua transaksi pembayaran
+            Daftar semua kuitansi pembayaran (1 baris = 1 kuitansi)
           </p>
         </div>
         {showUndoButton && (
@@ -200,7 +233,7 @@ export function PaymentHistory() {
               <Receipt className="h-5 w-5 text-muted-foreground" />
               <div>
                 <CardTitle className="text-base">
-                  {filteredPayments.length} transaksi
+                  {filteredGroups.length} kuitansi
                 </CardTitle>
                 <CardDescription>
                   Total: {formatCurrency(totalAmount)}
@@ -291,7 +324,7 @@ export function PaymentHistory() {
           </div>
         </CardHeader>
         <CardContent>
-          {paginatedPayments.length === 0 ? (
+          {paginatedGroups.length === 0 ? (
             <EmptyState
               icon={Receipt}
               title={search || filterType !== 'all' || filterMonth !== 'all' ? 'Tidak ada hasil' : 'Belum ada pembayaran'}
@@ -320,117 +353,135 @@ export function PaymentHistory() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedPayments.map((payment) => (
-                      <TableRow key={payment.id}>
-                        {columns.receiptNumber && (
-                          <TableCell className="font-mono text-xs">
-                            {payment.receiptNumber}
-                          </TableCell>
-                        )}
-                        {columns.date && (
-                          <TableCell>
-                            {new Date(payment.paymentDate).toLocaleDateString('id-ID')}
-                          </TableCell>
-                        )}
-                        {columns.student && (
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{payment.studentName}</p>
-                              <p className="text-xs text-muted-foreground">{payment.studentNis}</p>
-                            </div>
-                          </TableCell>
-                        )}
-                        {columns.className && (
-                          <TableCell>
-                            <Badge variant="secondary">{payment.className}</Badge>
-                          </TableCell>
-                        )}
-                        {columns.paymentType && (
-                          <TableCell>
-                            <div>
-                              <p className="text-sm">{payment.paymentTypeName}</p>
-                              {payment.isInstallment && (
-                                <p className="text-xs text-muted-foreground">
-                                  Cicilan {payment.installmentNumber}/{payment.totalInstallments}
+                    {paginatedGroups.map((group) => {
+                      const first = group.payments[0];
+                      const total = group.payments.reduce((s, p) => s + p.amount, 0);
+                      const typeLabel = group.payments.map(itemLabel).join(', ');
+                      const months = group.payments
+                        .map(p => p.month)
+                        .filter((m): m is number => m !== undefined && m !== null);
+                      const allPaidOff = group.payments.every(p => p.isPaidOff);
+                      const anyInstallment = group.payments.some(p => p.isInstallment);
+                      return (
+                        <TableRow key={group.receiptNumber}>
+                          {columns.receiptNumber && (
+                            <TableCell className="font-mono text-xs">
+                              {group.receiptNumber}
+                            </TableCell>
+                          )}
+                          {columns.date && (
+                            <TableCell>
+                              {new Date(first.paymentDate).toLocaleDateString('id-ID')}
+                            </TableCell>
+                          )}
+                          {columns.student && (
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{first.studentName}</p>
+                                <p className="text-xs text-muted-foreground">{first.studentNis}</p>
+                              </div>
+                            </TableCell>
+                          )}
+                          {columns.className && (
+                            <TableCell>
+                              <Badge variant="secondary">{first.className}</Badge>
+                            </TableCell>
+                          )}
+                          {columns.paymentType && (
+                            <TableCell>
+                              <div>
+                                <p
+                                  className="text-sm max-w-[220px] truncate block"
+                                  title={typeLabel}
+                                >
+                                  {typeLabel}
                                 </p>
+                                {group.payments.length > 1 && (
+                                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <ChevronsDown className="h-3 w-3" />
+                                    {group.payments.length} item
+                                  </p>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
+                          {columns.month && (
+                            <TableCell>
+                              {months.length > 0
+                                ? months.map(m => monthNames[m - 1]).join(', ')
+                                : '-'}
+                            </TableCell>
+                          )}
+                          {columns.method && (
+                            <TableCell>
+                              <span className="text-sm">
+                                {first.paymentMethod === 'cash' ? 'Tunai' :
+                                 first.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya'}
+                              </span>
+                            </TableCell>
+                          )}
+                          {columns.notes && (
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground max-w-[120px] truncate block" title={first.notes || ''}>
+                                {first.notes || '-'}
+                              </span>
+                            </TableCell>
+                          )}
+                          {columns.status && (
+                            <TableCell>
+                              {allPaidOff ? (
+                                <Badge className="bg-green-500">LUNAS</Badge>
+                              ) : anyInstallment ? (
+                                <Badge variant="outline" className="border-blue-500 text-blue-500">
+                                  Cicilan
+                                </Badge>
+                              ) : (
+                                <Badge variant="default">Lunas</Badge>
                               )}
-                            </div>
-                          </TableCell>
-                        )}
-                        {columns.month && (
-                          <TableCell>
-                            {payment.month ? monthNames[payment.month - 1] : '-'}
-                          </TableCell>
-                        )}
-                        {columns.method && (
-                          <TableCell>
-                            <span className="text-sm">
-                              {payment.paymentMethod === 'cash' ? 'Tunai' :
-                               payment.paymentMethod === 'transfer' ? 'Transfer' : 'Lainnya'}
-                            </span>
-                          </TableCell>
-                        )}
-                        {columns.notes && (
-                          <TableCell>
-                            <span className="text-sm text-muted-foreground max-w-[120px] truncate block" title={payment.notes || ''}>
-                              {payment.notes || '-'}
-                            </span>
-                          </TableCell>
-                        )}
-                        {columns.status && (
-                          <TableCell>
-                            {payment.isPaidOff ? (
-                              <Badge className="bg-green-500">LUNAS</Badge>
-                            ) : payment.isInstallment ? (
-                              <Badge variant="outline" className="border-blue-500 text-blue-500">
-                                Cicilan
-                              </Badge>
-                            ) : (
-                              <Badge variant="default">Lunas</Badge>
-                            )}
-                          </TableCell>
-                        )}
-                        {columns.createdBy && (
-                          <TableCell>
-                            <span className="text-sm">{payment.createdBy || '-'}</span>
-                          </TableCell>
-                        )}
-                        {columns.amount && (
+                            </TableCell>
+                          )}
+                          {columns.createdBy && (
+                            <TableCell>
+                              <span className="text-sm">{first.createdBy || '-'}</span>
+                            </TableCell>
+                          )}
+                          {columns.amount && (
+                            <TableCell className="text-right">
+                              <div>
+                                <p className="font-medium text-green-600">
+                                  {formatCurrency(total)}
+                                </p>
+                                {group.payments.length > 1 && (
+                                  <p className="text-xs text-muted-foreground">
+                                    {group.payments.length} transaksi
+                                  </p>
+                                )}
+                              </div>
+                            </TableCell>
+                          )}
                           <TableCell className="text-right">
-                            <div>
-                              <p className="font-medium text-green-600">
-                                {formatCurrency(payment.amount)}
-                              </p>
-                              {payment.isInstallment && payment.remainingAmount && payment.remainingAmount > 0 && (
-                                <p className="text-xs text-muted-foreground">
-                                  Sisa: {formatCurrency(payment.remainingAmount)}
-                                </p>
-                              )}
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handlePrint(group)}
+                                title="Cetak kuitansi"
+                              >
+                                <Printer className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(group)}
+                                title="Hapus kuitansi"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
                             </div>
                           </TableCell>
-                        )}
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handlePrint(payment)}
-                              title="Cetak kuitansi"
-                            >
-                              <Printer className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(payment)}
-                              title="Hapus pembayaran"
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -438,7 +489,7 @@ export function PaymentHistory() {
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-4">
                   <p className="text-sm text-muted-foreground">
-                    Halaman {currentPage} dari {totalPages} • Menampilkan {paginatedPayments.length} dari {filteredPayments.length} transaksi
+                    Halaman {currentPage} dari {totalPages} • Menampilkan {paginatedGroups.length} dari {filteredGroups.length} kuitansi
                   </p>
                   <div className="flex gap-2">
                     <Button
@@ -466,15 +517,15 @@ export function PaymentHistory() {
       </Card>
 
       <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Printer className="h-5 w-5" />
               Cetak Kuitansi
             </DialogTitle>
           </DialogHeader>
-          {selectedPayment && (
-            <ReceiptPrint payment={selectedPayment} onClose={() => setShowReceipt(false)} />
+          {selectedGroup && (
+            <ReceiptPrint payments={selectedGroup.payments} onClose={() => setShowReceipt(false)} />
           )}
         </DialogContent>
       </Dialog>
@@ -482,11 +533,14 @@ export function PaymentHistory() {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Hapus Pembayaran?</AlertDialogTitle>
+            <AlertDialogTitle>Hapus Kuitansi?</AlertDialogTitle>
             <AlertDialogDescription>
-              Apakah Anda yakin ingin menghapus pembayaran ini? Anda dapat mengembalikan transaksi dengan tombol Undo setelah menghapus.
+              Apakah Anda yakin ingin menghapus kuitansi ini beserta semua transaksinya? Anda dapat mengembalikan transaksi dengan tombol Undo setelah menghapus.
               <br /><br />
-              <strong>No. Kuitansi: {paymentToDelete?.receiptNumber}</strong>
+              <strong>No. Kuitansi: {groupToDelete?.receiptNumber}</strong>
+              {groupToDelete && groupToDelete.payments.length > 1 && (
+                <><br /><strong>{groupToDelete.payments.length} transaksi</strong></>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
